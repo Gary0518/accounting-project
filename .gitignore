@@ -1,0 +1,20 @@
+node_modules
+.next
+out
+build
+.env
+.env.local
+.env*.local
+.DS_Store
+*.log
+next-env.d.ts
+.vercel
+
+# 建置快取與本機 Supabase CLI 狀態
+*.tsbuildinfo
+supabase/.temp/
+
+# 真實營運財務資料，嚴禁進版控
+*.pdf
+*.xlsx
+*.csv

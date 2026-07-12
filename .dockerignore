@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+npm-debug.log*
+.git
+.gitignore
+.env
+.env*.local
+.DS_Store
+*.log
+README.md
+*.pdf
+supabase/seed_demo.sql
