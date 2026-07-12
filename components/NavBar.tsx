@@ -31,7 +31,6 @@ export default async function NavBar({
       }}
     >
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
-        <span className="font-bold">好室行旅</span>
         <nav className="flex gap-4 text-sm h-full items-center">
           {show.input && (
             <Link href="/" className="h-full flex items-center" style={linkStyle(active === "entries")}>

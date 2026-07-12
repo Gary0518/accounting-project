@@ -138,8 +138,8 @@ export default function EntryForm({
           style={{ background: "var(--bar-track)" }}
         >
           <div>
-            <label className="label">訂金（沒有就留 0）</label>
-            <input type="number" name="deposit" min="0" step="1" defaultValue={0} className="field" inputMode="numeric" />
+            <label className="label">訂金（沒有就留空）</label>
+            <input type="number" name="deposit" min="0" step="1" placeholder="0" className="field" inputMode="numeric" />
           </div>
           <div>
             <label className="label">訂金收款方式</label>

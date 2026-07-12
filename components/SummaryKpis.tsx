@@ -25,22 +25,22 @@ export default function SummaryKpis({
           hero
           sub={periodLabel}
         />
-        <StatTile label="加項（收入）" value={ntd(s.addition)} tone="good" />
-        <StatTile label="減項（支出）" value={ntd(s.deduction)} tone="critical" />
-        <StatTile
-          label="住宿率"
-          value={pct(s.occupancy)}
-          sub={`${num(s.totalRoomNights)} / ${num(s.capacity)} 間夜`}
-        />
-      </section>
-      <section className="grid grid-cols-3 gap-3">
-        <StatTile label="總間數" value={`${num(s.totalRoomNights)} 間`} />
-        <StatTile label="住宿筆數" value={`${num(s.bookings)} 筆`} />
         <StatTile
           label={`${year} 年度累計`}
           value={ntd(ytd)}
           tone={ytd < 0 ? "critical" : "good"}
         />
+        <StatTile label="加項（收入）" value={ntd(s.addition)} tone="good" />
+        <StatTile label="減項（支出）" value={ntd(s.deduction)} tone="critical" />
+      </section>
+      <section className="grid grid-cols-3 gap-3">
+        <StatTile
+          label="住宿率"
+          value={pct(s.occupancy)}
+          sub={`${num(s.totalRoomNights)} / ${num(s.capacity)} 間夜`}
+        />
+        <StatTile label="住宿筆數" value={`${num(s.bookings)} 筆`} />
+        <StatTile label="總間數" value={`${num(s.totalRoomNights)} 間`} />
       </section>
     </>
   );

@@ -115,6 +115,12 @@ export default function FilterBar({
           ))}
         </select>
 
+        {/* 手機版分隔線：把「標題＋民宿」與「年月控制項」分開（電腦版維持單排、隱藏此線） */}
+        <div
+          className="w-full md:hidden"
+          style={{ borderTop: "1px solid var(--border)" }}
+        />
+
         {/* 第一層：視角切換器（年度 / 月度，互斥；預設月度） */}
         <div
           className="inline-flex rounded-lg overflow-hidden"
@@ -266,6 +272,12 @@ export default function FilterBar({
             </>
           )}
         </div>
+
+        {/* 手機版分隔線：把整組篩選器與下方數據分開（電腦版隱藏） */}
+        <div
+          className="w-full md:hidden"
+          style={{ borderTop: "1px solid var(--border)" }}
+        />
       </div>
   );
 }
