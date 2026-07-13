@@ -10,6 +10,10 @@
 # 停止： docker compose down
 # =============================================================
 
+# 明確指定專案名稱：若不指定，Compose 會拿資料夾名稱當專案名，
+# 非 ASCII 的資料夾名會被過濾成空字串並報錯 project name must not be empty
+name: accounting
+
 services:
   web:
     build:
@@ -25,7 +29,9 @@ services:
       - "3000:3000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/login"]
+      # 用 127.0.0.1 而非 localhost：容器內 localhost 會解析成 IPv6 [::1]，
+      # 但 Next.js 綁在 IPv4 0.0.0.0，走 IPv6 會 connection refused
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/login"]
       interval: 30s
       timeout: 5s
       retries: 3
