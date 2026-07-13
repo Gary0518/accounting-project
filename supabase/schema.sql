@@ -137,12 +137,23 @@ alter table public.user_property_access  enable row level security;
 
 do $$
 begin
-  -- 下拉選單資料：登入者可讀寫（民宿名稱等非敏感）
-  create policy "properties_all"      on public.properties      for all to authenticated using (true) with check (true);
-  create policy "payment_methods_all" on public.payment_methods for all to authenticated using (true) with check (true);
-  create policy "channels_all"   on public.channels   for all to authenticated using (true) with check (true);
-  create policy "room_types_all" on public.room_types for all to authenticated using (true) with check (true);
-  create policy "categories_all" on public.categories for all to authenticated using (true) with check (true);
+  -- 下拉選單資料：所有登入者可讀（帳目輸入頁要載入選單），只有管理員可寫（設定 → 調整項目）
+  create policy properties_read      on public.properties      for select to authenticated using (true);
+  create policy payment_methods_read on public.payment_methods for select to authenticated using (true);
+  create policy channels_read        on public.channels        for select to authenticated using (true);
+  create policy room_types_read      on public.room_types      for select to authenticated using (true);
+  create policy categories_read      on public.categories      for select to authenticated using (true);
+
+  create policy properties_admin_write      on public.properties      for all to authenticated
+    using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+  create policy payment_methods_admin_write on public.payment_methods for all to authenticated
+    using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+  create policy channels_admin_write        on public.channels        for all to authenticated
+    using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+  create policy room_types_admin_write      on public.room_types      for all to authenticated
+    using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+  create policy categories_admin_write      on public.categories      for all to authenticated
+    using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
   -- 權限表：本人可讀自己的；管理員可讀寫全部
   create policy profiles_read        on public.profiles for select to authenticated
     using (id = auth.uid() or public.is_admin(auth.uid()));

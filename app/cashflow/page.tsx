@@ -82,7 +82,7 @@ export default async function CashflowPage({
         {/* 各收款方式淨收支（收入−支出，可盈可虧），依所選期間 */}
         <DivergingBars
           title="各收款方式淨收支（收入 − 支出）"
-          note={`${period.label}　合計淨收支 ${ntd(periodNetTotal)}（清潔費為自動計算、不歸收款方式）`}
+          note={`${period.label}　合計淨收支 ${ntd(periodNetTotal)}`}
           rows={netRows}
         />
 
@@ -95,7 +95,7 @@ export default async function CashflowPage({
         {/* 各經手人淨收支（收入−支出，可盈可虧），依所選期間 */}
         <DivergingBars
           title="各經手人淨收支（收入 − 支出）"
-          note={`${period.label}　合計淨收支 ${ntd(handlerNetTotal)}（清潔費為自動計算、不歸經手人）`}
+          note={`${period.label}　合計淨收支 ${ntd(handlerNetTotal)}`}
           rows={handlerNetRows}
         />
       </main>

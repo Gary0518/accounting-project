@@ -61,7 +61,7 @@ export default async function NavBar({
               className="h-full flex items-center"
               style={linkStyle(active === "admin")}
             >
-              權限管理
+              設定
             </Link>
           )}
         </nav>

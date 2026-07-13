@@ -63,6 +63,21 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 export const CLEANING_FEE_PER_STAY = 300;
 const CLEANING = "清潔費";
 
+// 清潔費固定歸給這位經手人 / 這個收款方式（每月皆同）。
+// CLEANING_HANDLER 必須與該帳號在「設定 → 權限管理」填的中文名字完全一致，
+// 否則圓餅圖會把同一個人拆成兩塊。
+export const CLEANING_HANDLER = "黃志剛";
+export const CLEANING_PAYMENT = "現金（志剛、怡安）";
+
+/** 住宿筆數（清潔費硬規則的乘數）：有填房間數的住宿費收入。 */
+const countStays = (entries: Entry[]) =>
+  entries.filter(
+    (e) =>
+      e.direction === "income" &&
+      e.category === "住宿費" &&
+      (e.rooms ?? 0) > 0,
+  ).length;
+
 /** 依金額分組成排行（給收款方式圓餅用）。fill 負責把每筆金額餵進 add()。 */
 function groupPay(
   fill: (add: (method: string | null, amt: number) => void) => void,
@@ -178,17 +193,20 @@ export function summarize(
     }
   }, addition);
 
-  // 各收款方式的支出（清潔費為自動計算、無收款方式，不列入）
+  // 各收款方式的支出（自動清潔費固定記在 CLEANING_PAYMENT）
   const byPaymentExpense = groupPay((add) => {
     for (const e of manualExpense) add(e.payment_method, e.amount);
+    add(CLEANING_PAYMENT, cleaningFee);
   }, deduction);
 
-  // 各經手人的收入 / 支出（訂金與主要金額同屬一位經手人；清潔費自動計算、無經手人）
+  // 各經手人的收入 / 支出（訂金與主要金額同屬一位經手人；
+  // 自動清潔費固定記在 CLEANING_HANDLER）
   const byHandler = groupPay((add) => {
     for (const e of income) add(e.handler, incomeAmt(e));
   }, addition);
   const byHandlerExpense = groupPay((add) => {
     for (const e of manualExpense) add(e.handler, e.amount);
+    add(CLEANING_HANDLER, cleaningFee);
   }, deduction);
 
   return {
@@ -229,7 +247,7 @@ export function periodNet(entries: Entry[]): number {
 
 /**
  * 各收款方式的淨收支（該方式的收入 − 該方式的支出，可正可負）。
- * 清潔費為自動計算、無實際收款方式，不列入。
+ * 自動清潔費固定計入 CLEANING_PAYMENT。
  */
 export function paymentNet(entries: Entry[]): { name: string; net: number }[] {
   const map = new Map<string, number>();
@@ -246,6 +264,7 @@ export function paymentNet(entries: Entry[]): { name: string; net: number }[] {
       add(e.payment_method, -e.amount);
     }
   }
+  add(CLEANING_PAYMENT, -countStays(entries) * CLEANING_FEE_PER_STAY);
   return [...map.entries()]
     .map(([name, net]) => ({ name, net }))
     .sort((a, b) => b.net - a.net);
@@ -253,7 +272,7 @@ export function paymentNet(entries: Entry[]): { name: string; net: number }[] {
 
 /**
  * 各經手人的淨收支（該人的收入 − 該人的支出，可正可負）。
- * 訂金與主要金額同屬一位經手人；清潔費為自動計算、無經手人，不列入。
+ * 訂金與主要金額同屬一位經手人；自動清潔費固定計入 CLEANING_HANDLER。
  */
 export function handlerNet(entries: Entry[]): { name: string; net: number }[] {
   const map = new Map<string, number>();
@@ -269,6 +288,7 @@ export function handlerNet(entries: Entry[]): { name: string; net: number }[] {
       add(e.handler, -e.amount);
     }
   }
+  add(CLEANING_HANDLER, -countStays(entries) * CLEANING_FEE_PER_STAY);
   return [...map.entries()]
     .map(([name, net]) => ({ name, net }))
     .sort((a, b) => b.net - a.net);
