@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess } from "@/lib/access";
+import {
+  canonical,
+  parseWorkbook,
+  type CommitPayload,
+  type ImportPreview,
+} from "@/lib/import-excel";
 
 export async function signOut() {
   const supabase = await createClient();
@@ -213,6 +219,174 @@ function revalidateAll() {
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/cashflow");
+}
+
+// =============================================================
+// 設定 → 匯入舊資料（老闆那份一個月一張工作表的 Excel）
+// =============================================================
+
+/**
+ * 第一步：解析上傳的 Excel，回傳預覽。這一步不寫入任何東西。
+ * 順便做三件事：把通路 / 房型的大小寫對回選單裡的正式寫法、找出選單裡沒有的新項目、
+ * 檢查這段期間該民宿是不是已經有帳目了（重複匯入會把營收記成兩倍）。
+ */
+export async function previewImport(formData: FormData): Promise<ImportPreview> {
+  await requireAdmin();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("請選擇一個 Excel 檔");
+  const propertyId = Number(formData.get("property_id"));
+  if (!Number.isFinite(propertyId)) throw new Error("請選擇要匯入哪一間民宿");
+
+  const parsed = await parseWorkbook(await file.arrayBuffer());
+
+  const supabase = await createClient();
+  const [{ data: channels }, { data: roomTypes }, { data: cats }, { data: profiles }] =
+    await Promise.all([
+      supabase.from("channels").select("name").eq("active", true),
+      supabase.from("room_types").select("name").eq("active", true),
+      supabase.from("categories").select("name, direction").eq("active", true),
+      supabase.from("profiles").select("display_name").not("display_name", "is", null),
+    ]);
+
+  const channelNames = (channels ?? []).map((c) => c.name);
+  const roomTypeNames = (roomTypes ?? []).map((r) => r.name);
+  // 科目的唯一鍵是「名稱 + 收支方向」：同一個「住宿費」可以既是收入科目、
+  // 又是支出科目（老闆就是拿支出的住宿費來記退款）。中間用 \u0000 串接，
+  // 是因為這個字元絕不會出現在名稱裡，科目名就算有空格也不會被拆錯。
+  const catNames = (cats ?? []).map((c) => `${c.name}\u0000${c.direction}`);
+
+  // 正規化：'trip' → 'TRIP'、'Expedia' → 'expedia'，避免同一個通路在報表上裂成兩塊
+  const rows = parsed.rows.map((r) => ({
+    ...r,
+    channel: canonical(r.channel, channelNames),
+    room_type: canonical(r.room_type, roomTypeNames),
+  }));
+
+  const missing = <T>(xs: T[], has: (x: T) => boolean) => [...new Set(xs)].filter((x) => !has(x));
+  const newChannels = missing(
+    rows.map((r) => r.channel).filter((x): x is string => !!x),
+    (n) => channelNames.includes(n),
+  );
+  const newRoomTypes = missing(
+    rows.map((r) => r.room_type).filter((x): x is string => !!x),
+    (n) => roomTypeNames.includes(n),
+  );
+  const newCategories = missing(
+    rows.map((r) => `${r.category}\u0000${r.direction}`),
+    (k) => catNames.includes(k),
+  ).map((k) => {
+    const [name, direction] = k.split("\u0000");
+    return { name, direction: direction as "income" | "expense" };
+  });
+
+  // 重複匯入偵測：該民宿在這段期間是否已有帳目
+  const dates = rows.map((r) => r.entry_date).sort();
+  let existing: ImportPreview["existing"] = null;
+  if (dates.length) {
+    const start = dates[0];
+    const end = dates[dates.length - 1];
+    const { count } = await supabase
+      .from("entries")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", propertyId)
+      .gte("entry_date", start)
+      .lte("entry_date", end);
+    if (count && count > 0) existing = { count, start, end };
+  }
+
+  return {
+    sheets: parsed.sheets,
+    rows,
+    skipped: parsed.skipped,
+    handlers: [...new Set(rows.map((r) => r.handler).filter((x): x is string => !!x))],
+    profiles: (profiles ?? []).map((p) => ({ name: p.display_name as string })),
+    newChannels,
+    newRoomTypes,
+    newCategories,
+    existing,
+    refunds: rows.filter((r) => r.direction === "expense" && r.category === "住宿費").length,
+  };
+}
+
+/** 第二步：把預覽過的資料真的寫進去。 */
+export async function commitImport(payload: CommitPayload): Promise<number> {
+  await requireAdmin();
+
+  const { propertyId, sheets, rows, handlerMap, addOptions } = payload;
+  if (!Number.isFinite(propertyId)) throw new Error("請選擇要匯入哪一間民宿");
+
+  const keep = rows.filter((r) => sheets.includes(r.sheet));
+  if (!keep.length) throw new Error("沒有選到任何要匯入的工作表");
+
+  // 前端送來的資料不能照單全收（就算只有管理員按得到，壞資料還是會弄髒報表）
+  const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const payloadRows = keep.map((r) => {
+    if (!isDate(r.entry_date)) throw new Error(`日期格式不對：${r.sheet} 第 ${r.excelRow} 列`);
+    if (r.direction !== "income" && r.direction !== "expense") throw new Error("方向不對");
+    if (!r.category?.trim()) throw new Error(`沒有科目：${r.sheet} 第 ${r.excelRow} 列`);
+    if (!Number.isFinite(r.amount) || r.amount < 0) {
+      throw new Error(`金額不對：${r.sheet} 第 ${r.excelRow} 列`);
+    }
+    const income = r.direction === "income";
+    const mapped = r.handler ? handlerMap[r.handler]?.trim() : "";
+    return {
+      property_id: propertyId,
+      entry_date: r.entry_date,
+      direction: r.direction,
+      category: r.category.trim(),
+      amount: r.amount,
+      // 老闆的 Excel 沒有「收款方式」這一欄，匯入的舊帳一律留空
+      payment_method: null,
+      deposit: 0,
+      deposit_payment_method: null,
+      channel: income ? r.channel : null,
+      guest_note: income ? r.guest_note : null,
+      rooms: income ? r.rooms : null,
+      room_type: income ? r.room_type : null,
+      nights: income ? r.nights : null,
+      handler: mapped || null,
+      memo: r.memo,
+    };
+  });
+
+  const supabase = await createClient();
+
+  if (addOptions) {
+    const at = (t: "channels" | "room_types") => [
+      ...new Set(
+        keep
+          .map((r) => (t === "channels" ? r.channel : r.room_type))
+          .filter((x): x is string => !!x),
+      ),
+    ];
+    await Promise.all([
+      ...at("channels").map((name) =>
+        supabase.from("channels").upsert({ name, active: true }, { onConflict: "name" }),
+      ),
+      ...at("room_types").map((name) =>
+        supabase.from("room_types").upsert({ name, active: true }, { onConflict: "name" }),
+      ),
+      ...[...new Set(keep.map((r) => `${r.category}\u0000${r.direction}`))].map((k) => {
+        const [name, direction] = k.split("\u0000");
+        return supabase
+          .from("categories")
+          .upsert({ name, direction, active: true }, { onConflict: "name,direction" });
+      }),
+    ]);
+  }
+
+  // 分批寫入：一次塞太多列容易被 Supabase 的請求大小限制擋下來
+  for (let i = 0; i < payloadRows.length; i += 200) {
+    const { error } = await supabase.from("entries").insert(payloadRows.slice(i, i + 200));
+    if (error) {
+      console.error("commitImport failed:", error);
+      throw new Error(`寫入失敗（已寫入 ${i} 筆）：${error.message}`);
+    }
+  }
+
+  revalidateAll();
+  return payloadRows.length;
 }
 
 /** 刪除一筆帳目。 */

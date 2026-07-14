@@ -2,6 +2,7 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import NoAccess from "@/components/NoAccess";
 import OptionManager, { type OptionItem } from "@/components/OptionManager";
+import ImportOldData from "@/components/ImportOldData";
 import { updateUserAccess } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess } from "@/lib/access";
@@ -9,7 +10,7 @@ import { CLEANING_FEE_PER_STAY, CLEANING_HANDLER, CLEANING_PAYMENT } from "@/lib
 
 export const dynamic = "force-dynamic";
 
-type Tab = "access" | "options";
+type Tab = "access" | "options" | "import";
 
 export default async function SettingsPage({
   searchParams,
@@ -27,7 +28,8 @@ export default async function SettingsPage({
   }
 
   const { tab: tabParam } = await searchParams;
-  const tab: Tab = tabParam === "options" ? "options" : "access";
+  const tab: Tab =
+    tabParam === "options" ? "options" : tabParam === "import" ? "import" : "access";
 
   return (
     <>
@@ -38,10 +40,13 @@ export default async function SettingsPage({
           <div className="flex gap-4 mt-3 text-sm">
             <TabLink tab="access" current={tab} label="管理權限" />
             <TabLink tab="options" current={tab} label="調整項目" />
+            <TabLink tab="import" current={tab} label="匯入舊資料" />
           </div>
         </div>
 
-        {tab === "access" ? <AccessSection /> : <OptionsSection />}
+        {tab === "access" && <AccessSection />}
+        {tab === "options" && <OptionsSection />}
+        {tab === "import" && <ImportSection />}
       </main>
     </>
   );
@@ -162,6 +167,18 @@ async function AccessSection() {
       })}
     </>
   );
+}
+
+// ---------- 分頁 3：匯入舊資料 ----------
+async function ImportSection() {
+  const supabase = await createClient();
+  const { data: properties } = await supabase
+    .from("properties")
+    .select("id, name")
+    .eq("active", true)
+    .order("sort_order");
+
+  return <ImportOldData properties={properties ?? []} />;
 }
 
 // ---------- 分頁 2：調整項目（帳目輸入頁的每個下拉選單）----------
