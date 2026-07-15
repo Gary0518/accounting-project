@@ -27,7 +27,7 @@ export default async function LoginPage({
         className="card w-full max-w-sm p-8 flex flex-col gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold">好室行旅</h1>
+          <h1 className="text-2xl font-bold">民宿管理系統</h1>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             出入帳 / 訂房管理系統
           </p>
