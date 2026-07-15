@@ -16,23 +16,9 @@ export async function loadDashboardData(
   const { start, end, days, trendYear } = period;
   const year = trendYear;
 
-  const { data: propsData } = await supabase
-    .from("properties")
-    .select("id, name, total_rooms")
-    .eq("active", true)
-    .order("sort_order");
-  // 只保留這個能力可看的民宿（管理員 allowedIds=null → 全部）
-  const properties = (propsData ?? []).filter(
-    (p) => allowedIds === null || allowedIds.includes(p.id),
-  );
-  // 供 "全部" 加總與查詢過濾用（空陣列以 [-1] 佔位避免查到全部）
+  // 供 "全部" 加總與查詢過濾用（空陣列以 [-1] 佔位避免查到全部）。
+  // 只依賴傳入的 allowedIds，不需要等民宿清單查回來，所以三個查詢可以並行。
   const scopeIds = allowedIds === null ? null : allowedIds.length ? allowedIds : [-1];
-
-  // 住宿率分母：單一民宿 → 該間房數；全部 → 所有民宿房數加總
-  const rooms =
-    property === "all"
-      ? properties.reduce((s, p) => s + (p.total_rooms ?? 0), 0)
-      : (properties.find((p) => String(p.id) === property)?.total_rooms ?? 0);
 
   // 當月明細
   let monthQuery = supabase
@@ -43,7 +29,6 @@ export async function loadDashboardData(
     .order("entry_date");
   if (property !== "all") monthQuery = monthQuery.eq("property_id", Number(property));
   else if (scopeIds) monthQuery = monthQuery.in("property_id", scopeIds);
-  const { data: monthRows } = await monthQuery;
 
   // 當年明細（完整欄位：年度範圍的圓餅 / 收款方式淨收支需要 payment_method）
   let yearQuery = supabase
@@ -53,7 +38,28 @@ export async function loadDashboardData(
     .lte("entry_date", `${year}-12-31`);
   if (property !== "all") yearQuery = yearQuery.eq("property_id", Number(property));
   else if (scopeIds) yearQuery = yearQuery.in("property_id", scopeIds);
-  const { data: yearRows } = await yearQuery;
+
+  // 三個查詢彼此獨立，一次同時發出（原本是一個等一個，切頁要多等兩趟來回）
+  const [{ data: propsData }, { data: monthRows }, { data: yearRows }] = await Promise.all([
+    supabase
+      .from("properties")
+      .select("id, name, total_rooms")
+      .eq("active", true)
+      .order("sort_order"),
+    monthQuery,
+    yearQuery,
+  ]);
+
+  // 只保留這個能力可看的民宿（管理員 allowedIds=null → 全部）
+  const properties = (propsData ?? []).filter(
+    (p) => allowedIds === null || allowedIds.includes(p.id),
+  );
+
+  // 住宿率分母：單一民宿 → 該間房數；全部 → 所有民宿房數加總
+  const rooms =
+    property === "all"
+      ? properties.reduce((s, p) => s + (p.total_rooms ?? 0), 0)
+      : (properties.find((p) => String(p.id) === property)?.total_rooms ?? 0);
 
   return {
     properties,
