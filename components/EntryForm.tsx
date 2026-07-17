@@ -65,7 +65,7 @@ export default function EntryForm({
     }) as const;
 
   return (
-    <form id="entry-form" action={onSubmit} className="card p-5 flex flex-col gap-4">
+    <form id="entry-form" action={onSubmit} className="card p-4 flex flex-col gap-3">
       {/* 收入 / 支出 切換 */}
       <div className="flex gap-2">
         <button
@@ -85,22 +85,24 @@ export default function EntryForm({
       </div>
       <input type="hidden" name="direction" value={direction} />
 
-      <div>
-        <label className="label">民宿</label>
-        <select name="property_id" required className="field" defaultValue={properties[0]?.id}>
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">民宿</label>
+          <select name="property_id" required className="field" defaultValue={properties[0]?.id}>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="label">日期</label>
           <input type="date" name="entry_date" defaultValue={today} required className="field" />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{direction === "income" ? "收入來源" : "支出科目"}</label>
           <select name="category" required className="field" defaultValue={cats[0]}>
@@ -111,39 +113,18 @@ export default function EntryForm({
             ))}
           </select>
         </div>
-      </div>
-
-      {/* 金額 + 收款方式（緊鄰）*/}
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">金額（{direction === "income" ? "收入" : "支出"}）</label>
           <input type="number" name="amount" min="0" step="1" required className="field" inputMode="numeric" />
         </div>
-        <div>
-          <label className="label">收款方式</label>
-          <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
-            {paymentMethods.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
-      {/* 收入才有的訂金（預設 0，並有自己的收款方式）*/}
-      {direction === "income" && (
-        <div
-          className="grid grid-cols-2 gap-3 p-3 rounded-xl"
-          style={{ background: "var(--bar-track)" }}
-        >
+      {/* 支出：收款方式 + 備註 同一列，表單更矮 */}
+      {direction === "expense" && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">訂金（沒有就留空）</label>
-            <input type="number" name="deposit" min="0" step="1" placeholder="0" className="field" inputMode="numeric" />
-          </div>
-          <div>
-            <label className="label">訂金收款方式</label>
-            <select name="deposit_payment_method" className="field" defaultValue={paymentMethods[0]?.name}>
+            <label className="label">收款方式</label>
+            <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
               {paymentMethods.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
@@ -151,13 +132,27 @@ export default function EntryForm({
               ))}
             </select>
           </div>
+          <div>
+            <label className="label">備註</label>
+            <input type="text" name="memo" className="field" />
+          </div>
         </div>
       )}
 
-      {/* 收入才顯示訂房 / 房型欄位 */}
+      {/* 收入：收款方式 + 訂金相關 + 訂房 / 房型欄位 */}
       {direction === "income" && (
         <>
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">收款方式</label>
+              <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
+                {paymentMethods.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="label">來源（通路）</label>
               <select name="channel" className="field" defaultValue="">
@@ -169,6 +164,30 @@ export default function EntryForm({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* 訂金（預設 0，並有自己的收款方式）*/}
+          <div
+            className="grid grid-cols-2 gap-3 p-3 rounded-xl"
+            style={{ background: "var(--bar-track)" }}
+          >
+            <div>
+              <label className="label">訂金（沒有就留空）</label>
+              <input type="number" name="deposit" min="0" step="1" placeholder="0" className="field" inputMode="numeric" />
+            </div>
+            <div>
+              <label className="label">訂金收款方式</label>
+              <select name="deposit_payment_method" className="field" defaultValue={paymentMethods[0]?.name}>
+                {paymentMethods.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">房型</label>
               <select name="room_type" className="field" defaultValue="">
@@ -180,28 +199,30 @@ export default function EntryForm({
                 ))}
               </select>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">房間數</label>
+                <input type="number" name="rooms" min="0" step="1" className="field" inputMode="numeric" />
+              </div>
+              <div>
+                <label className="label">天數</label>
+                <input type="number" name="nights" min="0" step="1" className="field" inputMode="numeric" />
+              </div>
+            </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">房間數</label>
-              <input type="number" name="rooms" min="0" step="1" className="field" inputMode="numeric" />
+              <label className="label">入住說明</label>
+              <input type="text" name="guest_note" className="field" placeholder="房客姓名 / 備註" />
             </div>
             <div>
-              <label className="label">天數</label>
-              <input type="number" name="nights" min="0" step="1" className="field" inputMode="numeric" />
+              <label className="label">備註</label>
+              <input type="text" name="memo" className="field" />
             </div>
-          </div>
-          <div>
-            <label className="label">入住說明</label>
-            <input type="text" name="guest_note" className="field" placeholder="房客姓名 / 備註" />
           </div>
         </>
       )}
-
-      <div>
-        <label className="label">備註</label>
-        <input type="text" name="memo" className="field" />
-      </div>
 
       {error && (
         <p className="text-sm" style={{ color: "var(--critical)" }}>

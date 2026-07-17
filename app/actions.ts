@@ -182,6 +182,19 @@ export async function addOption(formData: FormData) {
   if (direction) q = q.eq("direction", direction);
   const { data: existing } = await q;
 
+  // 全新項目排到最後：取目前最大的 sort_order + 10。
+  // （不設的話會吃 default 100，之後新增的項目會全部並在一起、順序不定。）
+  if (!existing?.length) {
+    let mq = supabase
+      .from(table)
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    if (direction) mq = mq.eq("direction", direction);
+    const { data: max } = await mq;
+    row.sort_order = (Number(max?.[0]?.sort_order) || 0) + 10;
+  }
+
   const { error } = existing?.length
     ? await supabase.from(table).update(row).eq("id", existing[0].id)
     : await supabase.from(table).insert(row);
@@ -209,6 +222,88 @@ export async function removeOption(formData: FormData) {
   if (error) {
     console.error(`removeOption(${table}) failed:`, error);
     throw new Error("移除項目失敗");
+  }
+  revalidateAll();
+}
+
+/**
+ * 修改一個下拉選項的名稱（民宿還可改可售房間數）。
+ * 不動 active／sort_order，歷史帳目也不受影響（帳目存的是當時的文字）。
+ */
+export async function updateOption(formData: FormData) {
+  await requireAdmin();
+  const table = assertOptionTable(formData.get("table"));
+  const id = Number(formData.get("id"));
+  if (!Number.isFinite(id)) throw new Error("項目不存在");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) throw new Error("名稱不可空白");
+
+  const supabase = await createClient();
+  const { amountField } = OPTION_TABLES[table];
+
+  const row: Record<string, unknown> = { name };
+  if (amountField) {
+    const n = Number(formData.get(amountField));
+    if (Number.isFinite(n) && n > 0) row[amountField] = n;
+  }
+
+  const { error } = await supabase.from(table).update(row).eq("id", id);
+  if (error) {
+    console.error(`updateOption(${table}) failed:`, error);
+    // 23505＝unique 違反：改成了已存在的名稱（科目是 name+direction）
+    if (error.code === "23505") throw new Error("已經有同名項目了");
+    throw new Error("修改項目失敗");
+  }
+  revalidateAll();
+}
+
+/**
+ * 上移／下移一個下拉選項。
+ * 做法：撈出這個選單目前顯示的項目（順序與設定頁一致），把目標和相鄰項對調，
+ * 再把整份清單重寫成間隔 10 的排序值 —— 順帶修好舊資料一律 sort_order=100 造成的並列。
+ */
+export async function reorderOption(formData: FormData) {
+  await requireAdmin();
+  const table = assertOptionTable(formData.get("table"));
+  const id = Number(formData.get("id"));
+  const dir = String(formData.get("dir"));
+  if (!Number.isFinite(id)) throw new Error("項目不存在");
+  if (dir !== "up" && dir !== "down") throw new Error("方向錯誤");
+
+  const supabase = await createClient();
+
+  let q = supabase.from(table).select("id").eq("active", true).order("sort_order").order("id");
+  if (table === "categories") {
+    const direction = String(formData.get("direction"));
+    if (direction !== "income" && direction !== "expense") {
+      throw new Error("科目必須指定收入或支出");
+    }
+    // 與設定頁一致：科目依收支方向分開排序，清潔費不在清單內
+    q = q.eq("direction", direction).neq("name", "清潔費");
+  }
+
+  const { data: rows, error: selErr } = await q;
+  if (selErr || !rows) {
+    console.error(`reorderOption(${table}) read failed:`, selErr);
+    throw new Error("排序失敗");
+  }
+
+  const order = rows.map((r) => r.id as number);
+  const i = order.indexOf(id);
+  if (i < 0) return; // 已不在清單（例如剛被別人移除）
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= order.length) return; // 已在頂／底，不用動
+  [order[i], order[j]] = [order[j], order[i]];
+
+  const results = await Promise.all(
+    order.map((rid, idx) =>
+      supabase.from(table).update({ sort_order: (idx + 1) * 10 }).eq("id", rid),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    console.error(`reorderOption(${table}) write failed:`, failed.error);
+    throw new Error("排序失敗");
   }
   revalidateAll();
 }

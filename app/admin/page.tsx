@@ -186,11 +186,11 @@ async function OptionsSection() {
   const supabase = await createClient();
   const [{ data: properties }, { data: cats }, { data: payments }, { data: channels }, { data: roomTypes }] =
     await Promise.all([
-      supabase.from("properties").select("id, name, total_rooms").eq("active", true).order("sort_order"),
-      supabase.from("categories").select("id, name, direction").eq("active", true).order("sort_order"),
-      supabase.from("payment_methods").select("id, name").eq("active", true).order("sort_order"),
-      supabase.from("channels").select("id, name").eq("active", true).order("sort_order"),
-      supabase.from("room_types").select("id, name").eq("active", true).order("sort_order"),
+      supabase.from("properties").select("id, name, total_rooms").eq("active", true).order("sort_order").order("id"),
+      supabase.from("categories").select("id, name, direction").eq("active", true).order("sort_order").order("id"),
+      supabase.from("payment_methods").select("id, name").eq("active", true).order("sort_order").order("id"),
+      supabase.from("channels").select("id, name").eq("active", true).order("sort_order").order("id"),
+      supabase.from("room_types").select("id, name").eq("active", true).order("sort_order").order("id"),
     ]);
 
   const propItems: OptionItem[] = (properties ?? []).map((p) => ({
