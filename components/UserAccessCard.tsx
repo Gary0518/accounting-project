@@ -141,10 +141,13 @@ export default function UserAccessCard({
             </tr>
           </thead>
           <tbody>
-            {properties.map((p) => {
+            {properties.map((p, idx) => {
               const s = rowState(p.id);
               return (
-                <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                <tr
+                  key={p.id}
+                  style={{ borderTop: idx === 0 ? DIVIDER : "1px solid var(--border)" }}
+                >
                   <td className="p-2">{p.name}</td>
                   {CAP_KEYS.map((k) => (
                     <td key={k} className="p-2 text-center">
