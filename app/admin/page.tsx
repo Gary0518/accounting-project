@@ -2,6 +2,7 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import NoAccess from "@/components/NoAccess";
 import OptionManager, { type OptionItem } from "@/components/OptionManager";
+import AccessTable, { type Caps } from "@/components/AccessTable";
 import ImportOldData from "@/components/ImportOldData";
 import { updateUserAccess } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
@@ -80,12 +81,14 @@ async function AccessSection() {
 
   const props = properties ?? [];
   // user_id -> property_id -> caps
-  const accessMap = new Map<string, Map<number, { i: boolean; o: boolean; c: boolean }>>();
+  const accessMap = new Map<string, Record<number, Caps>>();
   for (const r of upa ?? []) {
-    if (!accessMap.has(r.user_id)) accessMap.set(r.user_id, new Map());
-    accessMap
-      .get(r.user_id)!
-      .set(r.property_id, { i: r.can_input, o: r.can_operations, c: r.can_cashflow });
+    if (!accessMap.has(r.user_id)) accessMap.set(r.user_id, {});
+    accessMap.get(r.user_id)![r.property_id] = {
+      i: r.can_input,
+      o: r.can_operations,
+      c: r.can_cashflow,
+    };
   }
 
   return (
@@ -128,35 +131,7 @@ async function AccessSection() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ color: "var(--text-muted)", textAlign: "left" }}>
-                    <th className="p-2 font-medium">民宿</th>
-                    <th className="p-2 font-medium text-center">輸入帳目</th>
-                    <th className="p-2 font-medium text-center">營業數據</th>
-                    <th className="p-2 font-medium text-center">金流數據</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.map((p) => {
-                    const c = ua?.get(p.id);
-                    return (
-                      <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                        <td className="p-2">{p.name}</td>
-                        <td className="p-2 text-center">
-                          <input type="checkbox" name={`input_${p.id}`} defaultChecked={c?.i} />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input type="checkbox" name={`operations_${p.id}`} defaultChecked={c?.o} />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input type="checkbox" name={`cashflow_${p.id}`} defaultChecked={c?.c} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <AccessTable properties={props} initial={ua ?? {}} />
             </div>
 
             <button type="submit" className="btn btn-primary self-start text-sm">
