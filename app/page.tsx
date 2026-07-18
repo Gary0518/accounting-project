@@ -112,7 +112,15 @@ export default async function EntriesPage() {
                       }}
                     >
                       {e.direction === "income" ? "+" : "−"}
-                      {ntd(e.amount)}
+                      {ntd(e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0))}
+                      {e.direction === "income" && (e.deposit ?? 0) > 0 && (
+                        <div
+                          className="text-xs font-normal"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          含訂金 {ntd(e.deposit ?? 0)}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 tabular text-center">
                       {e.room_nights ? e.room_nights : "—"}
