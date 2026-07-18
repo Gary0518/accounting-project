@@ -2,7 +2,7 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import NoAccess from "@/components/NoAccess";
 import OptionManager, { type OptionItem } from "@/components/OptionManager";
-import AccessTable, { type Caps } from "@/components/AccessTable";
+import UserAccessCard, { type Caps } from "@/components/UserAccessCard";
 import ImportOldData from "@/components/ImportOldData";
 import { updateUserAccess } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
@@ -102,38 +102,7 @@ async function AccessSection() {
         const ua = accessMap.get(u.id);
         return (
           <form key={u.id} action={updateUserAccess} className="card p-5 flex flex-col gap-4">
-            <input type="hidden" name="user_id" value={u.id} />
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <div className="font-semibold">{u.display_name || u.email || u.id}</div>
-                {u.email && (
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {u.email}
-                  </div>
-                )}
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="is_admin" defaultChecked={u.is_admin} />
-                <span className="font-medium">管理員（看全部＋改設定）</span>
-              </label>
-            </div>
-
-            <div>
-              <label className="label">中文名字（會顯示為帳目的經手人）</label>
-              <input
-                type="text"
-                name="display_name"
-                defaultValue={u.display_name ?? ""}
-                placeholder="例：陳怡安"
-                className="field"
-                style={{ maxWidth: 260 }}
-              />
-            </div>
-
-            <div className="overflow-x-auto">
-              <AccessTable properties={props} initial={ua ?? {}} />
-            </div>
-
+            <UserAccessCard user={u} properties={props} initial={ua ?? {}} />
             <button type="submit" className="btn btn-primary self-start text-sm">
               儲存這位使用者
             </button>
