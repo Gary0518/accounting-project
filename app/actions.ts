@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -45,24 +46,49 @@ export async function createEntry(formData: FormData) {
     return v === null || v === "" ? null : String(v);
   };
 
-  const payload = {
+  const income = direction === "income";
+
+  // 房型可以填多組（一張訂單訂了大床房 ×1 + 小床房 ×2）。
+  // 天數是整張訂單共用的，所以只填一次，寫入時複製到每一列
+  // ——room_nights 是資料庫算的 rooms × nights，不複製的話間數會變 0。
+  const nights = income ? toInt("nights") : null;
+  const roomTypes = formData.getAll("room_type").map((v) => String(v).trim());
+  const roomCounts = formData.getAll("rooms").map((v) => String(v).trim());
+  const roomLines = income
+    ? roomTypes
+        .map((room_type, i) => ({
+          room_type: room_type || null,
+          rooms: roomCounts[i] === "" || roomCounts[i] === undefined ? null : Number(roomCounts[i]),
+        }))
+        .filter((r) => r.room_type !== null || r.rooms !== null)
+    : [];
+  // 沒填任何房型（支出、或不帶房型的收入）仍然要寫一列
+  const lines = roomLines.length ? roomLines : [{ room_type: null, rooms: null }];
+
+  const base = {
     property_id: Number(formData.get("property_id")),
     entry_date: String(formData.get("entry_date")),
     direction,
     category: String(formData.get("category")),
-    amount: Number(formData.get("amount")),
     payment_method: toStr("payment_method"),
-    deposit: direction === "income" ? Number(formData.get("deposit") || 0) : 0,
-    deposit_payment_method:
-      direction === "income" ? toStr("deposit_payment_method") : null,
-    channel: direction === "income" ? toStr("channel") : null,
-    guest_note: direction === "income" ? toStr("guest_note") : null,
-    rooms: direction === "income" ? toInt("rooms") : null,
-    room_type: direction === "income" ? toStr("room_type") : null,
-    nights: direction === "income" ? toInt("nights") : null,
+    deposit_payment_method: income ? toStr("deposit_payment_method") : null,
+    channel: income ? toStr("channel") : null,
+    guest_note: income ? toStr("guest_note") : null,
+    nights,
     handler,
     memo: toStr("memo"),
   };
+
+  // 金額與訂金全掛在第一列，第二列起是 0：一張訂單只有一筆錢，
+  // 拆列只是為了記下各房型的房間數。booking_id 讓後續能認出是同一張訂單。
+  const bookingId = lines.length > 1 ? randomUUID() : null;
+  const payload = lines.map((line, i) => ({
+    ...base,
+    ...line,
+    booking_id: bookingId,
+    amount: i === 0 ? Number(formData.get("amount")) : 0,
+    deposit: income && i === 0 ? Number(formData.get("deposit") || 0) : 0,
+  }));
 
   const { error } = await supabase.from("entries").insert(payload);
   if (error) {
@@ -484,11 +510,24 @@ export async function commitImport(payload: CommitPayload): Promise<number> {
   return payloadRows.length;
 }
 
-/** 刪除一筆帳目。 */
+/**
+ * 刪除一筆帳目。
+ * 多房型的訂單在資料表裡是好幾列，整張一起刪 —— 只刪一列的話，
+ * 若刪掉的是帶金額的第一列，剩下的 0 元列會留在帳上，錢就憑空消失了。
+ */
 export async function deleteEntry(formData: FormData) {
   const supabase = await createClient();
   const id = String(formData.get("id"));
-  const { error } = await supabase.from("entries").delete().eq("id", id);
+
+  const { data: row } = await supabase
+    .from("entries")
+    .select("booking_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  const { error } = row?.booking_id
+    ? await supabase.from("entries").delete().eq("booking_id", row.booking_id)
+    : await supabase.from("entries").delete().eq("id", id);
   if (error) {
     console.error("deleteEntry failed:", error);
     throw new Error("刪除帳目失敗");

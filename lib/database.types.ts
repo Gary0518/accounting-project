@@ -62,6 +62,7 @@ export type Database = {
       entries: {
         Row: {
           amount: number
+          booking_id: string | null
           category: string
           channel: string | null
           created_at: string
@@ -84,6 +85,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          booking_id?: string | null
           category: string
           channel?: string | null
           created_at?: string
@@ -106,6 +108,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          booking_id?: string | null
           category?: string
           channel?: string | null
           created_at?: string

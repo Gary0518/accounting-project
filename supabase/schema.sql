@@ -65,6 +65,8 @@ create table if not exists public.entries (
   nights       int     check (nights is null or nights >= 0),       -- 天數
   -- 間數 = 房間數 × 天數（由資料庫自動計算，不需人工填）
   room_nights  int generated always as (coalesce(rooms,0) * coalesce(nights,0)) stored,
+  -- 同一張訂單（多房型時會拆成多列）共用的識別碼；null = 這列自成一張訂單
+  booking_id   uuid,
   handler      text,                                                -- 經手人
   memo         text,                                                -- 備註（例：1600收退300）
   created_by   uuid    references auth.users(id) default auth.uid(),
@@ -76,6 +78,7 @@ create index if not exists idx_entries_date      on public.entries (entry_date);
 create index if not exists idx_entries_direction on public.entries (direction);
 create index if not exists idx_entries_channel   on public.entries (channel);
 create index if not exists idx_entries_property  on public.entries (property_id);
+create index if not exists idx_entries_booking   on public.entries (booking_id);
 
 -- updated_at 自動更新
 create or replace function public.set_updated_at()

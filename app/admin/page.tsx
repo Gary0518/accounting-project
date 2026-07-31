@@ -7,7 +7,7 @@ import ImportOldData from "@/components/ImportOldData";
 import { updateUserAccess } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess } from "@/lib/access";
-import { CLEANING_FEE_PER_STAY, CLEANING_HANDLER, CLEANING_PAYMENT } from "@/lib/domain";
+import { CLEANING_FEE_PER_ROOM, CLEANING_HANDLER, CLEANING_PAYMENT } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -177,7 +177,7 @@ async function OptionsSection() {
         <OptionManager
           table="categories"
           title="收入來源"
-          hint="切到「收入」時的科目下拉。「住宿費」是計算住宿筆數與住宿率的依據，建議別移除。"
+          hint="切到「收入」時的科目下拉。「住宿費」是計算清潔費與住宿率的依據，建議別移除。"
           items={catItems("income")}
           direction="income"
           placeholder="例：傭金收入"
@@ -185,7 +185,7 @@ async function OptionsSection() {
         <OptionManager
           table="categories"
           title="支出科目"
-          hint={`切到「支出」時的科目下拉。清潔費由系統自動計算（住宿筆數 × ${CLEANING_FEE_PER_STAY}，記在 ${CLEANING_HANDLER} / ${CLEANING_PAYMENT}），不在此管理。`}
+          hint={`切到「支出」時的科目下拉。清潔費由系統自動計算（房間數 × ${CLEANING_FEE_PER_ROOM}，記在 ${CLEANING_HANDLER} / ${CLEANING_PAYMENT}），不在此管理。`}
           items={catItems("expense")}
           direction="expense"
           placeholder="例：修繕費"

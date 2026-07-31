@@ -33,8 +33,29 @@ export default function EntryForm({
   const [direction, setDirection] = useState<"income" | "expense">("income");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 勾起來的房型 → 間數。沒勾的房型不在這裡，也不會送出。
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const today = new Date().toISOString().slice(0, 10);
   const cats = categories[direction];
+
+  // 「未指定」也列一格：以前房型下拉有這個選項，有人只記間數不記房型，
+  // 拿掉的話那種訂單就算不出清潔費了。
+  const roomOptions = [
+    ...roomTypes.map((r) => ({ key: r.name, name: r.name, label: r.name })),
+    { key: "__none__", name: "", label: "未指定房型" },
+  ];
+
+  const toggleRoomType = (key: string) =>
+    setPicked((p) => {
+      if (key in p) {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      }
+      return { ...p, [key]: "1" }; // 勾了預設 1 間，最常見的情況少打一個字
+    });
+  const setRoomCount = (key: string, v: string) =>
+    setPicked((p) => ({ ...p, [key]: v }));
 
   async function onSubmit(formData: FormData) {
     setPending(true);
@@ -43,6 +64,8 @@ export default function EntryForm({
       await createEntry(formData);
       const form = document.getElementById("entry-form") as HTMLFormElement;
       form?.reset();
+      // 房型的勾選狀態在 React 這邊，reset() 清不到，要自己清
+      setPicked({});
       router.refresh();
     } catch {
       // 不外洩資料庫內部訊息，只給使用者可行動的提示
@@ -189,37 +212,77 @@ export default function EntryForm({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">房型</label>
-              <select name="room_type" className="field" defaultValue="">
-                <option value="">未指定</option>
-                {roomTypes.map((r) => (
-                  <option key={r.name} value={r.name}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label">房間數</label>
-                <input type="number" name="rooms" min="0" step="1" className="field" inputMode="numeric" />
-              </div>
-              <div>
-                <label className="label">天數</label>
-                <input type="number" name="nights" min="0" step="1" className="field" inputMode="numeric" />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
               <label className="label">入住說明</label>
               <input type="text" name="guest_note" className="field" placeholder="房客姓名 / 備註" />
             </div>
             <div>
-              <label className="label">備註</label>
-              <input type="text" name="memo" className="field" />
+              <label className="label">天數</label>
+              <input
+                type="number"
+                name="nights"
+                min="0"
+                step="1"
+                className="field"
+                inputMode="numeric"
+              />
             </div>
+          </div>
+
+          {/* 房型全部列出來，勾了才填間數（大床房 ×1 + 小床房 ×2 = 一張訂單兩列）。
+              天數是整張訂單共用的，所以不在這裡重複填。 */}
+          <div className="flex flex-col gap-2">
+            <label className="label" style={{ marginBottom: 0 }}>
+              房型 / 間數（可複選）
+            </label>
+            {roomOptions.map(({ key, name, label }) => {
+              const on = key in picked;
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <label
+                    className="flex items-center gap-2"
+                    style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleRoomType(key)}
+                      style={{ width: 18, height: 18, flex: "none", accentColor: "var(--series-1)" }}
+                    />
+                    <span
+                      style={{
+                        color: on ? "var(--text-primary)" : "var(--text-secondary)",
+                        fontWeight: on ? 600 : 400,
+                      }}
+                    >
+                      {label}
+                    </span>
+                  </label>
+                  {on && (
+                    <>
+                      {/* 勾選的房型才送出；兩個欄位同序出現，後端按順序配對 */}
+                      <input type="hidden" name="room_type" value={name} />
+                      <input
+                        type="number"
+                        name="rooms"
+                        min="1"
+                        step="1"
+                        className="field"
+                        inputMode="numeric"
+                        aria-label={`${label} 的間數`}
+                        value={picked[key]}
+                        onChange={(e) => setRoomCount(key, e.target.value)}
+                        style={{ width: 84, flex: "none", padding: "0.35rem 0.5rem" }}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div>
+            <label className="label">備註</label>
+            <input type="text" name="memo" className="field" />
           </div>
         </>
       )}

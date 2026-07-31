@@ -85,7 +85,7 @@ export function canonical(value: string | null, options: string[]): string | nul
   return hit ?? value;
 }
 
-// 清潔費由系統自動計算（住宿筆數/房間數 × 300），匯入會重複記帳，所以略過。
+// 清潔費由系統自動計算（房間數 × 300），匯入會重複記帳，所以略過。
 const CLEANING = "清潔費";
 
 // ---------- 儲存格取值 ----------
