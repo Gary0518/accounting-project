@@ -22,6 +22,8 @@ export interface Entry {
   room_type: string | null;
   nights: number | null;
   room_nights: number | null;
+  // 同一張訂單（多房型會拆成多列）共用；null = 這列自成一張訂單（舊資料與匯入的帳）
+  booking_id: string | null;
   handler: string | null;
   memo: string | null;
 }
@@ -52,15 +54,16 @@ export interface MonthlySummary {
   byHandlerExpense: RankRow[]; // 各經手人的支出（供圓餅圖）
   byRoomType: RoomTypeRow[]; // 房型間數統計
   totalRoomNights: number; // 總間數
-  bookings: number; // 住宿筆數
+  bookings: number; // 住宿筆數（訂單數：多房型的訂單有多列，只算一筆）
   occupancy: number; // 住宿率 0~1
   capacity: number; // 可售房間夜 = 房間總數 × 天數
 }
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-// 硬規則：清潔費 = 住宿筆數 × 此金額（自動計算，不由人工輸入）
-export const CLEANING_FEE_PER_STAY = 300;
+// 硬規則：清潔費 = 房間數 × 此金額（自動計算，不由人工輸入）。
+// 每間房打掃一次，與住幾晚無關：一間大床 + 兩間小床住三晚 → 3 × 300。
+export const CLEANING_FEE_PER_ROOM = 300;
 const CLEANING = "清潔費";
 
 // 清潔費固定歸給這位經手人 / 這個收款方式（每月皆同）。
@@ -69,14 +72,25 @@ const CLEANING = "清潔費";
 export const CLEANING_HANDLER = "黃志剛";
 export const CLEANING_PAYMENT = "現金（志剛、怡安）";
 
-/** 住宿筆數（清潔費硬規則的乘數）：有填房間數的住宿費收入。 */
-const countStays = (entries: Entry[]) =>
+/** 住宿列：有填房間數的住宿費收入（多房型的訂單會有多列）。 */
+const staysOf = (entries: Entry[]) =>
   entries.filter(
     (e) =>
       e.direction === "income" &&
       e.category === "住宿費" &&
       (e.rooms ?? 0) > 0,
-  ).length;
+  );
+
+/** 清潔房間數（清潔費硬規則的乘數）：所有住宿列的房間數加總。 */
+const countRooms = (entries: Entry[]) =>
+  sum(staysOf(entries).map((e) => e.rooms ?? 0));
+
+/**
+ * 住宿筆數（訂單數）：同一張訂單就算拆成多列（多房型）也只算一筆。
+ * 舊資料沒有 booking_id，用 id 當替身 → 每列各自一筆，行為與升級前相同。
+ */
+const countBookings = (stays: Entry[]) =>
+  new Set(stays.map((e) => e.booking_id ?? e.id)).size;
 
 /** 依金額分組成排行（給收款方式圓餅用）。fill 負責把每筆金額餵進 add()。 */
 function groupPay(
@@ -105,10 +119,14 @@ function rank(
 ): RankRow[] {
   const map = new Map<string, { count: number; total: number }>();
   for (const e of rows) {
+    // 金額 0 的列不計入筆數：多房型訂單的第二列起金額掛 0，
+    // 照算會讓通路 / 科目的「筆數」隨房型數量虛增（與 groupPay 同一原則）。
+    const v = value(e);
+    if (v <= 0) continue;
     const k = key(e) || "未指定";
     const cur = map.get(k) ?? { count: 0, total: 0 };
     cur.count += 1;
-    cur.total += value(e);
+    cur.total += v;
     map.set(k, cur);
   }
   return [...map.entries()]
@@ -134,11 +152,11 @@ export function summarize(
   const incomeAmt = (e: Entry) => e.amount + (e.deposit ?? 0);
   const addition = sum(income.map(incomeAmt));
 
-  // 住宿相關先算（清潔費硬規則要用到「住宿筆數」）
-  const stays = income.filter(
-    (e) => e.category === "住宿費" && (e.rooms ?? 0) > 0,
-  );
-  const bookings = stays.length;
+  // 住宿相關先算（清潔費硬規則要用到「房間數」）
+  const stays = staysOf(income);
+  // 筆數 = 訂單數（多房型的訂單多列但只算一筆）；房間數 = 清潔費的乘數
+  const bookings = countBookings(stays);
+  const cleanRooms = sum(stays.map((e) => e.rooms ?? 0));
   const roomNightsOf = (e: Entry) =>
     e.room_nights ?? (e.rooms ?? 0) * (e.nights ?? 0);
   const totalRoomNights = sum(stays.map(roomNightsOf));
@@ -162,8 +180,8 @@ export function summarize(
   const capacity = totalRooms * daysInMonth;
   const occupancy = capacity ? totalRoomNights / capacity : 0;
 
-  // 硬規則：清潔費 = 住宿筆數 × 300（自動算，人工輸入的清潔費一律忽略以免重複）
-  const cleaningFee = bookings * CLEANING_FEE_PER_STAY;
+  // 硬規則：清潔費 = 房間數 × 300（自動算，人工輸入的清潔費一律忽略以免重複）
+  const cleaningFee = cleanRooms * CLEANING_FEE_PER_ROOM;
   const manualExpense = allExpense.filter((e) => e.category !== CLEANING);
   const deduction = sum(manualExpense.map((e) => e.amount)) + cleaningFee;
   const profit = addition - deduction;
@@ -176,8 +194,9 @@ export function summarize(
     ...(cleaningFee > 0
       ? [
           {
+            // 這裡的「筆數」是房間數：清潔費按房間算，寫筆數會對不上金額
             name: CLEANING,
-            count: bookings,
+            count: cleanRooms,
             total: cleaningFee,
             share: deduction ? cleaningFee / deduction : 0,
           },
@@ -234,14 +253,11 @@ export function summarize(
 export function periodNet(entries: Entry[]): number {
   const income = entries.filter((e) => e.direction === "income");
   const addition = sum(income.map((e) => e.amount + (e.deposit ?? 0)));
-  const bookings = income.filter(
-    (e) => e.category === "住宿費" && (e.rooms ?? 0) > 0,
-  ).length;
   const manualExpense = entries.filter(
     (e) => e.direction === "expense" && e.category !== CLEANING,
   );
   const deduction =
-    sum(manualExpense.map((e) => e.amount)) + bookings * CLEANING_FEE_PER_STAY;
+    sum(manualExpense.map((e) => e.amount)) + countRooms(income) * CLEANING_FEE_PER_ROOM;
   return addition - deduction;
 }
 
@@ -264,7 +280,7 @@ export function paymentNet(entries: Entry[]): { name: string; net: number }[] {
       add(e.payment_method, -e.amount);
     }
   }
-  add(CLEANING_PAYMENT, -countStays(entries) * CLEANING_FEE_PER_STAY);
+  add(CLEANING_PAYMENT, -countRooms(entries) * CLEANING_FEE_PER_ROOM);
   return [...map.entries()]
     .map(([name, net]) => ({ name, net }))
     .sort((a, b) => b.net - a.net);
@@ -288,7 +304,7 @@ export function handlerNet(entries: Entry[]): { name: string; net: number }[] {
       add(e.handler, -e.amount);
     }
   }
-  add(CLEANING_HANDLER, -countStays(entries) * CLEANING_FEE_PER_STAY);
+  add(CLEANING_HANDLER, -countRooms(entries) * CLEANING_FEE_PER_ROOM);
   return [...map.entries()]
     .map(([name, net]) => ({ name, net }))
     .sort((a, b) => b.net - a.net);

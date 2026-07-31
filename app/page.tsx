@@ -47,7 +47,7 @@ export default async function EntriesPage() {
 
   const categories = {
     income: (cats ?? []).filter((c) => c.direction === "income").map((c) => c.name),
-    // 清潔費由系統自動計算（住宿筆數 × 300），不開放人工輸入
+    // 清潔費由系統自動計算（房間數 × 300），不開放人工輸入
     expense: (cats ?? [])
       .filter((c) => c.direction === "expense" && c.name !== "清潔費")
       .map((c) => c.name),
@@ -57,7 +57,27 @@ export default async function EntriesPage() {
     (p) => allowed === null || allowed.includes(p.id),
   );
   const propName = new Map(props.map((p) => [p.id, p.name]));
-  const rows = (recent ?? []) as Entry[];
+
+  // 多房型的訂單在資料表是好幾列（金額全掛在第一列）。把同一張訂單的列排在一起，
+  // 第二列起標成「續列」——只顯示房型與間數，金額欄留白，才不會看起來像漏記帳。
+  const fetched = (recent ?? []) as Entry[];
+  const booking = new Map<string, Entry[]>();
+  for (const e of fetched) {
+    const k = e.booking_id ?? e.id;
+    booking.set(k, [...(booking.get(k) ?? []), e]);
+  }
+  const rows = fetched.flatMap((e) => {
+    const k = e.booking_id ?? e.id;
+    const group = booking.get(k);
+    if (!group) return []; // 這張訂單的列已經跟著第一列一起輸出了
+    booking.delete(k);
+    // 帶金額的那列一定排在最前面：查詢沒有保證同一張訂單的列是什麼順序，
+    // 照原順序可能讓 0 元的續列排到上面去，金額就顯示在錯的那一列。
+    const ordered = [...group].sort(
+      (a, b) => b.amount + (b.deposit ?? 0) - (a.amount + (a.deposit ?? 0)),
+    );
+    return ordered.map((entry, i) => ({ entry, cont: i > 0 }));
+  });
 
   return (
     <>
@@ -92,41 +112,56 @@ export default async function EntriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((e) => (
-                  <tr key={e.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td className="p-3 tabular whitespace-nowrap">{e.entry_date.slice(5)}</td>
-                    <td className="p-3 whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
-                      {e.property_id ? propName.get(e.property_id) ?? "—" : "—"}
+                {rows.map(({ entry: e, cont }) => (
+                  <tr
+                    key={e.id}
+                    style={{ borderTop: cont ? "none" : "1px solid var(--border)" }}
+                  >
+                    <td className="p-3 tabular whitespace-nowrap">
+                      {cont ? "" : e.entry_date.slice(5)}
                     </td>
-                    <td className="p-3">{e.category}</td>
+                    <td className="p-3 whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+                      {cont ? "" : e.property_id ? propName.get(e.property_id) ?? "—" : "—"}
+                    </td>
+                    <td className="p-3">{cont ? "" : e.category}</td>
                     <td className="p-3" style={{ color: "var(--text-secondary)" }}>
-                      {[e.guest_note, e.channel].filter(Boolean).join(" · ") || e.memo || "—"}
+                      {cont
+                        ? `↳ ${e.room_type ?? "同一張訂單"}`
+                        : [e.guest_note, e.channel].filter(Boolean).join(" · ") || e.memo || "—"}
                     </td>
                     <td
                       className="p-3 tabular text-right whitespace-nowrap"
                       style={{
-                        color:
-                          e.direction === "income"
+                        color: cont
+                          ? "var(--text-muted)"
+                          : e.direction === "income"
                             ? "var(--good-text)"
                             : "var(--critical)",
                       }}
                     >
-                      {e.direction === "income" ? "+" : "−"}
-                      {ntd(e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0))}
-                      {e.direction === "income" && (e.deposit ?? 0) > 0 && (
-                        <div
-                          className="text-xs font-normal"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          含訂金 {ntd(e.deposit ?? 0)}
-                        </div>
+                      {cont ? (
+                        "—"
+                      ) : (
+                        <>
+                          {e.direction === "income" ? "+" : "−"}
+                          {ntd(e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0))}
+                          {e.direction === "income" && (e.deposit ?? 0) > 0 && (
+                            <div
+                              className="text-xs font-normal"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              含訂金 {ntd(e.deposit ?? 0)}
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="p-3 tabular text-center">
                       {e.room_nights ? e.room_nights : "—"}
                     </td>
                     <td className="p-3 text-right">
-                      <DeleteEntryButton id={e.id} />
+                      {/* 續列沒有自己的刪除鈕：刪第一列就是刪掉整張訂單 */}
+                      {!cont && <DeleteEntryButton id={e.id} />}
                     </td>
                   </tr>
                 ))}
