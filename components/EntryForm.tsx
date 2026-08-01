@@ -78,8 +78,8 @@ export default function EntryForm({
   const tabStyle = (on: boolean) =>
     ({
       flex: 1,
-      padding: "0.55rem",
-      borderRadius: 10,
+      padding: "0.35rem",
+      borderRadius: 8,
       fontWeight: 700,
       cursor: "pointer",
       border: "1px solid var(--border)",
@@ -88,7 +88,7 @@ export default function EntryForm({
     }) as const;
 
   return (
-    <form id="entry-form" action={onSubmit} className="card p-4 flex flex-col gap-3">
+    <form id="entry-form" action={onSubmit} className="card p-3 flex flex-col gap-2 form-compact">
       {/* 收入 / 支出 切換 */}
       <div className="flex gap-2">
         <button
@@ -108,7 +108,7 @@ export default function EntryForm({
       </div>
       <input type="hidden" name="direction" value={direction} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">民宿</label>
           <select name="property_id" required className="field" defaultValue={properties[0]?.id}>
@@ -125,7 +125,7 @@ export default function EntryForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">{direction === "income" ? "收入來源" : "支出科目"}</label>
           <select name="category" required className="field" defaultValue={cats[0]}>
@@ -144,7 +144,7 @@ export default function EntryForm({
 
       {/* 支出：收款方式 + 備註 同一列，表單更矮 */}
       {direction === "expense" && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="label">收款方式</label>
             <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
@@ -165,7 +165,7 @@ export default function EntryForm({
       {/* 收入：收款方式 + 訂金相關 + 訂房 / 房型欄位 */}
       {direction === "income" && (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">收款方式</label>
               <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
@@ -191,7 +191,7 @@ export default function EntryForm({
 
           {/* 訂金（預設 0，並有自己的收款方式）*/}
           <div
-            className="grid grid-cols-2 gap-3 p-3 rounded-xl"
+            className="grid grid-cols-2 gap-2 p-2 rounded-lg"
             style={{ background: "var(--bar-track)" }}
           >
             <div>
@@ -210,7 +210,7 @@ export default function EntryForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">入住說明</label>
               <input type="text" name="guest_note" className="field" placeholder="房客姓名 / 備註" />
@@ -230,54 +230,66 @@ export default function EntryForm({
 
           {/* 房型全部列出來，勾了才填間數（大床房 ×1 + 小床房 ×2 = 一張訂單兩列）。
               天數是整張訂單共用的，所以不在這裡重複填。 */}
-          <div className="flex flex-col gap-2">
-            <label className="label" style={{ marginBottom: 0 }}>
-              房型 / 間數（可複選）
-            </label>
-            {roomOptions.map(({ key, name, label }) => {
-              const on = key in picked;
-              return (
-                <div key={key} className="flex items-center gap-2">
-                  <label
-                    className="flex items-center gap-2"
-                    style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+          <div>
+            <label className="label">房型 / 間數（可複選）</label>
+            {/* 一個房型一列會把表單拉得很長，改成會自動換行的標籤，
+                只有勾起來的才展開右邊的間數框 */}
+            <div className="flex flex-wrap gap-1.5">
+              {roomOptions.map(({ key, name, label }) => {
+                const on = key in picked;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: on ? "0.15rem 0.3rem 0.15rem 0.5rem" : "0.25rem 0.55rem",
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      background: on ? "var(--bar-track)" : "transparent",
+                    }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggleRoomType(key)}
-                      style={{ width: 18, height: 18, flex: "none", accentColor: "var(--series-1)" }}
-                    />
-                    <span
-                      style={{
-                        color: on ? "var(--text-primary)" : "var(--text-secondary)",
-                        fontWeight: on ? 600 : 400,
-                      }}
+                    <label
+                      className="flex items-center gap-1.5"
+                      style={{ cursor: "pointer", whiteSpace: "nowrap" }}
                     >
-                      {label}
-                    </span>
-                  </label>
-                  {on && (
-                    <>
-                      {/* 勾選的房型才送出；兩個欄位同序出現，後端按順序配對 */}
-                      <input type="hidden" name="room_type" value={name} />
                       <input
-                        type="number"
-                        name="rooms"
-                        min="1"
-                        step="1"
-                        className="field"
-                        inputMode="numeric"
-                        aria-label={`${label} 的間數`}
-                        value={picked[key]}
-                        onChange={(e) => setRoomCount(key, e.target.value)}
-                        style={{ width: 84, flex: "none", padding: "0.35rem 0.5rem" }}
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => toggleRoomType(key)}
+                        style={{ width: 15, height: 15, flex: "none", accentColor: "var(--series-1)" }}
                       />
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                      <span
+                        className="text-sm"
+                        style={{
+                          color: on ? "var(--text-primary)" : "var(--text-secondary)",
+                          fontWeight: on ? 600 : 400,
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </label>
+                    {on && (
+                      <>
+                        {/* 勾選的房型才送出；兩個欄位同序出現，後端按順序配對 */}
+                        <input type="hidden" name="room_type" value={name} />
+                        <input
+                          type="number"
+                          name="rooms"
+                          min="1"
+                          step="1"
+                          className="field"
+                          inputMode="numeric"
+                          aria-label={`${label} 的間數`}
+                          value={picked[key]}
+                          onChange={(e) => setRoomCount(key, e.target.value)}
+                          style={{ width: 48, flex: "none", padding: "0.15rem 0.3rem", textAlign: "center" }}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div>
@@ -292,11 +304,16 @@ export default function EntryForm({
           {error}
         </p>
       )}
-      <button type="submit" className="btn btn-primary" disabled={pending}>
+      <button
+        type="submit"
+        className="btn btn-primary"
+        disabled={pending}
+        style={{ padding: "0.45rem 1.1rem" }}
+      >
         {pending ? "儲存中…" : "新增帳目"}
       </button>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        經手人會自動記錄為目前登入的帳號；間數（房間數 × 天數）由系統自動計算，儀表板會即時更新給所有同事。
+      <p className="text-xs" style={{ color: "var(--text-muted)", marginTop: "-0.15rem" }}>
+        經手人自動記錄為登入帳號，間數 = 房間數 × 天數。
       </p>
     </form>
   );
