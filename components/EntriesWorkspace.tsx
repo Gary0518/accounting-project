@@ -78,7 +78,7 @@ export default function EntriesWorkspace({
   };
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-6 grid lg:grid-cols-[minmax(0,380px)_1fr] gap-5 items-start">
+    <main className="max-w-[1400px] mx-auto px-4 py-6 grid lg:grid-cols-[minmax(0,380px)_1fr] gap-5 items-start">
       <div className="lg:sticky lg:top-20">
         <h1 className="text-lg font-bold mb-3">新增帳目</h1>
         <EntryForm

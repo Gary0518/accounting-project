@@ -53,7 +53,7 @@ export default async function DashboardPage({
     <>
       <RealtimeRefresh />
       <NavBar active="dashboard" />
-      <main className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-5">
+      <main className="max-w-[1400px] mx-auto px-4 py-6 flex flex-col gap-5">
         <div className="flex flex-wrap items-center gap-3 no-print">
           <div className="flex-1 min-w-0">
             <FilterBar

@@ -62,7 +62,7 @@ export default async function CashflowPage({
     <>
       <RealtimeRefresh />
       <NavBar active="cashflow" />
-      <main className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-5">
+      <main className="max-w-[1400px] mx-auto px-4 py-6 flex flex-col gap-5">
         <FilterBar
           title="金流數據"
           properties={properties}

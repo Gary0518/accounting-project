@@ -30,7 +30,7 @@ export default async function NavBar({
         borderBottom: "1px solid var(--border)",
       }}
     >
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
+      <div className="max-w-[1400px] mx-auto px-4 h-14 flex items-center gap-6">
         <nav className="flex gap-4 text-sm h-full items-center">
           {show.input && (
             <Link href="/" className="h-full flex items-center" style={linkStyle(active === "entries")}>
