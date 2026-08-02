@@ -28,6 +28,55 @@ export interface Entry {
   memo: string | null;
 }
 
+/** 修改帳目時，表單要用的初始值（由一張訂單的那幾列攤平而來）。 */
+export interface EntryDraft {
+  bookingKey: string; // booking_id ?? id，送回後端指定要改哪一張訂單
+  property_id: string;
+  entry_date: string;
+  direction: Direction;
+  category: string;
+  amount: string;
+  payment_method: string;
+  deposit: string;
+  deposit_payment_method: string;
+  channel: string;
+  guest_note: string;
+  nights: string;
+  memo: string;
+  rooms: { room_type: string; rooms: string }[];
+}
+
+/**
+ * 把一張訂單（多房型時是好幾列）攤平成表單初始值。
+ * rows[0] 必須是帶金額的那一列——金額、訂金、通路等訂單層級的欄位只記在那裡。
+ */
+export function entryToDraft(rows: Entry[]): EntryDraft {
+  const head = rows[0];
+  const str = (v: string | number | null | undefined) =>
+    v === null || v === undefined ? "" : String(v);
+  return {
+    // 單列的帳沒有 booking_id，就用它自己的 id 當識別
+    bookingKey: head.booking_id ?? head.id,
+    property_id: str(head.property_id),
+    entry_date: head.entry_date,
+    direction: head.direction,
+    category: head.category,
+    amount: str(head.amount),
+    payment_method: str(head.payment_method),
+    // 訂金 0 在表單上要顯示成空的（欄位本來就寫「沒有就留空」）
+    deposit: (head.deposit ?? 0) > 0 ? str(head.deposit) : "",
+    deposit_payment_method: str(head.deposit_payment_method),
+    channel: str(head.channel),
+    guest_note: str(head.guest_note),
+    nights: str(head.nights),
+    memo: str(head.memo),
+    // 沒填房間數的列不是房型資料，不要帶進勾選狀態
+    rooms: rows
+      .filter((r) => (r.rooms ?? 0) > 0)
+      .map((r) => ({ room_type: str(r.room_type), rooms: str(r.rooms) })),
+  };
+}
+
 export interface RankRow {
   name: string;
   count: number;

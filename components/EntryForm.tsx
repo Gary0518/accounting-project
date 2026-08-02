@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createEntry } from "@/app/actions";
+import { createEntry, updateEntry } from "@/app/actions";
+import { type EntryDraft } from "@/lib/domain";
 
 interface Option {
   name: string;
@@ -21,31 +22,49 @@ export default function EntryForm({
   propertyId,
   onPropertyChange,
   onSaved,
+  initial,
+  onDone,
   paymentMethods,
   channels,
   roomTypes,
   categories,
 }: {
   properties: Property[];
-  /** 目前選的民宿（由外層保管，右邊的最近帳目要跟著它走） */
-  propertyId: string;
-  onPropertyChange: (v: string) => void;
-  /** 存檔成功後通知外層，讓右邊的最近帳目重新載入 */
-  onSaved: () => void;
+  /** 新增模式：目前選的民宿（由外層保管，右邊的最近帳目要跟著它走） */
+  propertyId?: string;
+  onPropertyChange?: (v: string) => void;
+  /** 存檔成功後通知外層重新載入明細 */
+  onSaved?: () => void;
+  /** 有值 = 修改模式：欄位帶入這張訂單原本的內容 */
+  initial?: EntryDraft;
+  /** 修改模式：存好或取消後關掉視窗 */
+  onDone?: () => void;
   paymentMethods: Option[];
   channels: Option[];
   roomTypes: Option[];
   categories: Categories;
 }) {
+  const editing = !!initial;
   const router = useRouter();
-  const [direction, setDirection] = useState<"income" | "expense">("income");
+  const [direction, setDirection] = useState<"income" | "expense">(initial?.direction ?? "income");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 勾起來的房型 → 間數。沒勾的房型不在這裡，也不會送出。
-  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (initial?.rooms ?? []).map((r) => [r.room_type || "__none__", r.rooms]),
+    ),
+  );
+  // 修改模式的民宿由表單自己管；新增模式交給外層（要記住上次選的那間）
+  const [editProperty, setEditProperty] = useState(initial?.property_id ?? "");
+  const formRef = useRef<HTMLFormElement>(null);
   const propertyRef = useRef<HTMLSelectElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const cats = categories[direction];
+
+  const currentProperty = editing ? editProperty : (propertyId ?? "");
+  const changeProperty = (v: string) =>
+    editing ? setEditProperty(v) : onPropertyChange?.(v);
 
   // 「未指定」也列一格：以前房型下拉有這個選項，有人只記間數不記房型，
   // 拿掉的話那種訂單就算不出清潔費了。
@@ -70,19 +89,25 @@ export default function EntryForm({
     setPending(true);
     setError(null);
     try {
+      if (editing) {
+        await updateEntry(formData);
+        onSaved?.();
+        router.refresh();
+        onDone?.();
+        return; // 修改完視窗就關了，不用清空欄位
+      }
       await createEntry(formData);
-      const form = document.getElementById("entry-form") as HTMLFormElement;
-      form?.reset();
+      formRef.current?.reset();
       // reset() 會把民宿打回選單第一項，但 React 這邊的值沒變、不會重畫，
       // 所以要自己把記住的民宿寫回去，不然存完一筆就跳回第一間。
-      if (propertyRef.current) propertyRef.current.value = propertyId;
+      if (propertyRef.current) propertyRef.current.value = currentProperty;
       // 房型的勾選狀態在 React 這邊，reset() 清不到，要自己清
       setPicked({});
-      onSaved();
+      onSaved?.();
       router.refresh();
     } catch {
       // 不外洩資料庫內部訊息，只給使用者可行動的提示
-      setError("儲存失敗，請確認欄位後再試一次。");
+      setError(editing ? "修改失敗，請確認欄位後再試一次。" : "儲存失敗，請確認欄位後再試一次。");
     } finally {
       setPending(false);
     }
@@ -101,7 +126,12 @@ export default function EntryForm({
     }) as const;
 
   return (
-    <form id="entry-form" action={onSubmit} className="card p-3 flex flex-col gap-2 form-compact">
+    <form
+      ref={formRef}
+      action={onSubmit}
+      className={`flex flex-col gap-2 form-compact${editing ? "" : " card p-3"}`}
+    >
+      {editing && <input type="hidden" name="booking_key" value={initial.bookingKey} />}
       {/* 收入 / 支出 切換 */}
       <div className="flex gap-2">
         <button
@@ -129,8 +159,8 @@ export default function EntryForm({
             required
             className="field"
             ref={propertyRef}
-            value={propertyId}
-            onChange={(e) => onPropertyChange(e.target.value)}
+            value={currentProperty}
+            onChange={(e) => changeProperty(e.target.value)}
           >
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
@@ -141,14 +171,20 @@ export default function EntryForm({
         </div>
         <div>
           <label className="label">日期</label>
-          <input type="date" name="entry_date" defaultValue={today} required className="field" />
+          <input
+            type="date"
+            name="entry_date"
+            defaultValue={initial?.entry_date ?? today}
+            required
+            className="field"
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">{direction === "income" ? "收入來源" : "支出科目"}</label>
-          <select name="category" required className="field" defaultValue={cats[0]}>
+          <select name="category" required className="field" defaultValue={initial?.category ?? cats[0]}>
             {cats.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -164,6 +200,7 @@ export default function EntryForm({
             min="0"
             step="1"
             required
+            defaultValue={initial?.amount}
             className="field no-spin"
             inputMode="numeric"
             onWheel={(e) => e.currentTarget.blur()}
@@ -176,7 +213,12 @@ export default function EntryForm({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="label">收款方式</label>
-            <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
+            <select
+              name="payment_method"
+              required
+              className="field"
+              defaultValue={initial?.payment_method ?? paymentMethods[0]?.name}
+            >
               {paymentMethods.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
@@ -186,7 +228,7 @@ export default function EntryForm({
           </div>
           <div>
             <label className="label">備註</label>
-            <input type="text" name="memo" className="field" />
+            <input type="text" name="memo" defaultValue={initial?.memo} className="field" />
           </div>
         </div>
       )}
@@ -197,7 +239,12 @@ export default function EntryForm({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">收款方式</label>
-              <select name="payment_method" required className="field" defaultValue={paymentMethods[0]?.name}>
+              <select
+              name="payment_method"
+              required
+              className="field"
+              defaultValue={initial?.payment_method ?? paymentMethods[0]?.name}
+            >
                 {paymentMethods.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
@@ -207,7 +254,7 @@ export default function EntryForm({
             </div>
             <div>
               <label className="label">來源（通路）</label>
-              <select name="channel" className="field" defaultValue="">
+              <select name="channel" className="field" defaultValue={initial?.channel ?? ""}>
                 <option value="">未指定</option>
                 {channels.map((c) => (
                   <option key={c.name} value={c.name}>
@@ -231,6 +278,7 @@ export default function EntryForm({
                 min="0"
                 step="1"
                 placeholder="0"
+                defaultValue={initial?.deposit}
                 className="field no-spin"
                 inputMode="numeric"
                 onWheel={(e) => e.currentTarget.blur()}
@@ -238,7 +286,11 @@ export default function EntryForm({
             </div>
             <div>
               <label className="label">訂金收款方式</label>
-              <select name="deposit_payment_method" className="field" defaultValue={paymentMethods[0]?.name}>
+              <select
+                name="deposit_payment_method"
+                className="field"
+                defaultValue={initial?.deposit_payment_method ?? paymentMethods[0]?.name}
+              >
                 {paymentMethods.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
@@ -251,7 +303,13 @@ export default function EntryForm({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">入住說明</label>
-              <input type="text" name="guest_note" className="field" placeholder="房客姓名 / 備註" />
+              <input
+                type="text"
+                name="guest_note"
+                defaultValue={initial?.guest_note}
+                className="field"
+                placeholder="房客姓名 / 備註"
+              />
             </div>
             <div>
               <label className="label">天數</label>
@@ -260,6 +318,7 @@ export default function EntryForm({
                 name="nights"
                 min="0"
                 step="1"
+                defaultValue={initial?.nights}
                 className="field"
                 inputMode="numeric"
               />
@@ -332,7 +391,7 @@ export default function EntryForm({
 
           <div>
             <label className="label">備註</label>
-            <input type="text" name="memo" className="field" />
+            <input type="text" name="memo" defaultValue={initial?.memo} className="field" />
           </div>
         </>
       )}
@@ -342,16 +401,31 @@ export default function EntryForm({
           {error}
         </p>
       )}
-      <button
-        type="submit"
-        className="btn btn-primary"
-        disabled={pending}
-        style={{ padding: "0.45rem 1.1rem" }}
-      >
-        {pending ? "儲存中…" : "新增帳目"}
-      </button>
+      <div className="flex gap-2">
+        {editing && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={onDone}
+            disabled={pending}
+            style={{ padding: "0.45rem 1.1rem" }}
+          >
+            取消
+          </button>
+        )}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={pending}
+          style={{ padding: "0.45rem 1.1rem", flex: 1 }}
+        >
+          {pending ? "儲存中…" : editing ? "儲存修改" : "新增帳目"}
+        </button>
+      </div>
       <p className="text-xs" style={{ color: "var(--text-muted)", marginTop: "-0.15rem" }}>
-        經手人自動記錄為登入帳號，間數 = 房間數 × 天數。
+        {editing
+          ? "經手人維持原本記錄的人；多房型的訂單是整張一起修改。"
+          : "經手人自動記錄為登入帳號，間數 = 房間數 × 天數。"}
       </p>
     </form>
   );

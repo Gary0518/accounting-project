@@ -24,7 +24,7 @@ export default async function NavBar({
 
   return (
     <header
-      className="sticky top-0 z-10 backdrop-blur"
+      className="sticky top-0 z-10 backdrop-blur no-print"
       style={{
         background: "color-mix(in srgb, var(--page) 85%, transparent)",
         borderBottom: "1px solid var(--border)",

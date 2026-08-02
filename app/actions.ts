@@ -19,24 +19,31 @@ export async function signOut() {
   redirect("/login");
 }
 
-/** 新增一筆帳目（收入或支出）。 */
-export async function createEntry(formData: FormData) {
+/** 目前登入者要記成哪個「經手人」（顯示名 → email）。 */
+async function currentHandler(): Promise<string | null> {
   const supabase = await createClient();
-
-  // 經手人不再由表單輸入，改為自動辨識目前登入的帳號（收入支出皆同）。
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  let handler: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("display_name, email")
-      .eq("id", user.id)
-      .maybeSingle();
-    handler = profile?.display_name || profile?.email || user.email || null;
-  }
+  if (!user) return null;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name, email")
+    .eq("id", user.id)
+    .maybeSingle();
+  return profile?.display_name || profile?.email || user.email || null;
+}
 
+/**
+ * 把表單內容攤成要寫進 entries 的那幾列（新增與修改共用）。
+ *
+ * 一張訂單可以有多個房型，一個房型一列；金額與訂金全掛在第一列，
+ * 第二列起是 0 —— 一張訂單只有一筆錢，拆列只是為了記下各房型的房間數。
+ *
+ * @param handler   經手人（修改時沿用原本的，不改記在誰頭上）
+ * @param bookingId 多列時共用的識別碼；只有一列時傳 null
+ */
+function buildEntryRows(formData: FormData, handler: string | null, bookingId: string | null) {
   const direction = String(formData.get("direction")) as "income" | "expense";
   const toInt = (k: string) => {
     const v = formData.get(k);
@@ -80,21 +87,84 @@ export async function createEntry(formData: FormData) {
     memo: toStr("memo"),
   };
 
-  // 金額與訂金全掛在第一列，第二列起是 0：一張訂單只有一筆錢，
-  // 拆列只是為了記下各房型的房間數。booking_id 讓後續能認出是同一張訂單。
-  const bookingId = lines.length > 1 ? randomUUID() : null;
-  const payload = lines.map((line, i) => ({
+  return lines.map((line, i) => ({
     ...base,
     ...line,
-    booking_id: bookingId,
+    booking_id: lines.length > 1 ? bookingId : null,
     amount: i === 0 ? Number(formData.get("amount")) : 0,
     deposit: income && i === 0 ? Number(formData.get("deposit") || 0) : 0,
   }));
+}
 
-  const { error } = await supabase.from("entries").insert(payload);
+/** 新增一筆帳目（收入或支出）。 */
+export async function createEntry(formData: FormData) {
+  const supabase = await createClient();
+  const rows = buildEntryRows(formData, await currentHandler(), randomUUID());
+
+  const { error } = await supabase.from("entries").insert(rows);
   if (error) {
     console.error("createEntry failed:", error);
     throw new Error("新增帳目失敗");
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/cashflow");
+}
+
+/**
+ * 修改一筆帳目（多房型的訂單是整張一起改）。
+ *
+ * 不用「先刪光再重寫」：那在寫入失敗時會把帳整筆弄丟。改成逐列比對——
+ * 舊列夠用就原地更新（id 保留），不夠就補、多出來就刪，任一步失敗都還留著原本的資料。
+ */
+export async function updateEntry(formData: FormData) {
+  const key = String(formData.get("booking_key") ?? "");
+  // key 會被拼進查詢字串，先確認它真的是 uuid
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) {
+    throw new Error("找不到要修改的帳目");
+  }
+
+  const access = await getAccess();
+  if (!access) throw new Error("尚未登入");
+  const allowed = allowedPropertyIds(access, "input");
+  const target = Number(formData.get("property_id"));
+  // 縱深防禦：RLS 已經擋一層，這裡再確認一次不能把帳改到沒權限的民宿
+  if (allowed && !allowed.includes(target)) throw new Error("沒有這間民宿的權限");
+
+  const supabase = await createClient();
+  const { data: existing, error: readErr } = await supabase
+    .from("entries")
+    .select("*")
+    .or(`id.eq.${key},booking_id.eq.${key}`);
+  if (readErr || !existing?.length) {
+    console.error("updateEntry read failed:", readErr);
+    throw new Error("找不到要修改的帳目");
+  }
+
+  // 舊列排序方式要與畫面一致：帶金額的那列算第一列
+  const old = [...existing].sort(
+    (a, b) => b.amount + (b.deposit ?? 0) - (a.amount + (a.deposit ?? 0)),
+  );
+  // 經手人沿用原本的：修改不代表這筆帳換人負責
+  const handler = old[0].handler ?? (await currentHandler());
+  const rows = buildEntryRows(formData, handler, old[0].booking_id ?? key);
+
+  const ops: PromiseLike<{ error: unknown }>[] = [];
+  for (let i = 0; i < Math.max(old.length, rows.length); i++) {
+    if (i < rows.length && i < old.length) {
+      ops.push(supabase.from("entries").update(rows[i]).eq("id", old[i].id));
+    } else if (i < rows.length) {
+      ops.push(supabase.from("entries").insert(rows[i]));
+    } else {
+      ops.push(supabase.from("entries").delete().eq("id", old[i].id));
+    }
+  }
+  const results = await Promise.all(ops);
+  const failed = results.find((r) => r.error);
+  if (failed) {
+    console.error("updateEntry write failed:", failed.error);
+    throw new Error("修改帳目失敗");
   }
 
   revalidatePath("/");

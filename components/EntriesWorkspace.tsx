@@ -59,7 +59,11 @@ export default function EntriesWorkspace({
       // 無痕模式等情況讀不到 localStorage，就維持預設值
     }
     // 存的民宿可能已停用或權限被改掉，確認還在清單裡才套用
-    if (saved && properties.some((p) => String(p.id) === saved)) setFormProperty(saved);
+    if (saved && properties.some((p) => String(p.id) === saved)) {
+      setFormProperty(saved);
+      // 上次選過就直接載入那一間的帳目；第一次來（沒存過）才維持空白
+      setView(saved);
+    }
   }, [properties]);
 
   // 左邊換民宿 → 記起來，右邊也跟著看那一間
@@ -94,6 +98,7 @@ export default function EntriesWorkspace({
         view={view}
         onViewChange={setView}
         reloadToken={reloadToken}
+        editOptions={{ properties, paymentMethods, channels, roomTypes, categories }}
       />
     </main>
   );

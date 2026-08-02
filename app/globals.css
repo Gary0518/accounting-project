@@ -153,3 +153,64 @@ body {
   border-color: var(--border);
   color: var(--text-primary);
 }
+
+/* =============================================================
+   列印 / 匯出 PDF
+   放在檔案最後：裡面重新定義了 :root 的顏色，要壓過上面的深色模式那組。
+   ============================================================= */
+.print-only {
+  display: none;
+}
+/* 螢幕上限制高度可捲動，列印時整份展開（見下方 @media print） */
+.scroll-box {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+
+  /* 深色模式的人直接列印會印出整片黑底，強制換成白底黑字 */
+  :root {
+    --page: #ffffff;
+    --surface: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #333333;
+    --text-muted: #666666;
+    --border: rgba(0, 0, 0, 0.22);
+    --grid: #cccccc;
+    --bar-track: #e8e8e8;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+
+  /* 瀏覽器預設不印背景色，長條圖與色塊會整片消失 */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 圖表卡片不要被切在兩頁中間 */
+  .card {
+    break-inside: avoid;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .scroll-box {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* 紙張本來就窄，把螢幕用的置中留白拿掉 */
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}
