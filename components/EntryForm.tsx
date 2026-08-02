@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEntry } from "@/app/actions";
 
@@ -18,12 +18,20 @@ interface Categories {
 
 export default function EntryForm({
   properties,
+  propertyId,
+  onPropertyChange,
+  onSaved,
   paymentMethods,
   channels,
   roomTypes,
   categories,
 }: {
   properties: Property[];
+  /** 目前選的民宿（由外層保管，右邊的最近帳目要跟著它走） */
+  propertyId: string;
+  onPropertyChange: (v: string) => void;
+  /** 存檔成功後通知外層，讓右邊的最近帳目重新載入 */
+  onSaved: () => void;
   paymentMethods: Option[];
   channels: Option[];
   roomTypes: Option[];
@@ -35,6 +43,7 @@ export default function EntryForm({
   const [error, setError] = useState<string | null>(null);
   // 勾起來的房型 → 間數。沒勾的房型不在這裡，也不會送出。
   const [picked, setPicked] = useState<Record<string, string>>({});
+  const propertyRef = useRef<HTMLSelectElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const cats = categories[direction];
 
@@ -64,8 +73,12 @@ export default function EntryForm({
       await createEntry(formData);
       const form = document.getElementById("entry-form") as HTMLFormElement;
       form?.reset();
+      // reset() 會把民宿打回選單第一項，但 React 這邊的值沒變、不會重畫，
+      // 所以要自己把記住的民宿寫回去，不然存完一筆就跳回第一間。
+      if (propertyRef.current) propertyRef.current.value = propertyId;
       // 房型的勾選狀態在 React 這邊，reset() 清不到，要自己清
       setPicked({});
+      onSaved();
       router.refresh();
     } catch {
       // 不外洩資料庫內部訊息，只給使用者可行動的提示
@@ -111,7 +124,14 @@ export default function EntryForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">民宿</label>
-          <select name="property_id" required className="field" defaultValue={properties[0]?.id}>
+          <select
+            name="property_id"
+            required
+            className="field"
+            ref={propertyRef}
+            value={propertyId}
+            onChange={(e) => onPropertyChange(e.target.value)}
+          >
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -138,7 +158,16 @@ export default function EntryForm({
         </div>
         <div>
           <label className="label">金額（{direction === "income" ? "收入" : "支出"}）</label>
-          <input type="number" name="amount" min="0" step="1" required className="field" inputMode="numeric" />
+          <input
+            type="number"
+            name="amount"
+            min="0"
+            step="1"
+            required
+            className="field no-spin"
+            inputMode="numeric"
+            onWheel={(e) => e.currentTarget.blur()}
+          />
         </div>
       </div>
 
@@ -196,7 +225,16 @@ export default function EntryForm({
           >
             <div>
               <label className="label">訂金（沒有就留空）</label>
-              <input type="number" name="deposit" min="0" step="1" placeholder="0" className="field" inputMode="numeric" />
+              <input
+                type="number"
+                name="deposit"
+                min="0"
+                step="1"
+                placeholder="0"
+                className="field no-spin"
+                inputMode="numeric"
+                onWheel={(e) => e.currentTarget.blur()}
+              />
             </div>
             <div>
               <label className="label">訂金收款方式</label>
@@ -282,7 +320,7 @@ export default function EntryForm({
                           aria-label={`${label} 的間數`}
                           value={picked[key]}
                           onChange={(e) => setRoomCount(key, e.target.value)}
-                          style={{ width: 48, flex: "none", padding: "0.15rem 0.3rem", textAlign: "center" }}
+                          style={{ width: 66, flex: "none", padding: "0.15rem 0.2rem 0.15rem 0.35rem" }}
                         />
                       </>
                     )}

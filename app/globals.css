@@ -125,14 +125,14 @@ body {
   font-size: 0.75rem;
   margin-bottom: 0.15rem;
 }
-/* 拿掉數字欄的上下箭頭：間數框只有 48px 寬，箭頭會吃掉一半空間。
-   順帶解掉「滑鼠滾過金額欄就把數字捲掉」這個老問題。 */
-.form-compact input[type="number"] {
+/* 金額類欄位拿掉上下箭頭：金額是打出來的，箭頭一次只加 1 元沒有用處，
+   還會被誤按。天數與間數是個位數，用箭頭點反而快，所以不套這個。 */
+.no-spin {
   -moz-appearance: textfield;
   appearance: textfield;
 }
-.form-compact input[type="number"]::-webkit-outer-spin-button,
-.form-compact input[type="number"]::-webkit-inner-spin-button {
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }

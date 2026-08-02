@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAccess } from "@/lib/access";
+import { getAccess, allowedPropertyIds } from "@/lib/access";
+import { type Entry } from "@/lib/domain";
 import {
   canonical,
   parseWorkbook,
@@ -99,6 +100,45 @@ export async function createEntry(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath("/cashflow");
+}
+
+/**
+ * 讀取「最近帳目」面板的資料。
+ *
+ * 進站時右邊面板是空的、不呼叫這裡，所以首頁少一趟查詢；使用者選了民宿才載入。
+ * @param view 民宿 id 字串，或 "all" 代表全部（僅限自己看得到的那些）
+ */
+export async function loadRecentEntries(view: string): Promise<Entry[]> {
+  const access = await getAccess();
+  if (!access) throw new Error("尚未登入");
+  // 與左邊表單同一組民宿：可輸入的才列得出來
+  const allowed = allowedPropertyIds(access, "input");
+
+  const supabase = await createClient();
+  let q = supabase
+    .from("entries")
+    .select("*")
+    .order("entry_date", { ascending: false })
+    .limit(30);
+
+  if (view === "all") {
+    // 管理員 allowed=null → 不加條件；一般人限縮在自己可輸入的民宿
+    // （空陣列以 [-1] 佔位，否則 .in([]) 會變成查全部）
+    if (allowed) q = q.in("property_id", allowed.length ? allowed : [-1]);
+  } else {
+    const id = Number(view);
+    if (!Number.isFinite(id)) return [];
+    // RLS 已經擋一層，這裡再擋一次：沒權限的民宿一律當作沒有資料
+    if (allowed && !allowed.includes(id)) return [];
+    q = q.eq("property_id", id);
+  }
+
+  const { data, error } = await q;
+  if (error) {
+    console.error("loadRecentEntries failed:", error);
+    throw new Error("讀取最近帳目失敗");
+  }
+  return (data ?? []) as Entry[];
 }
 
 /** 管理員：更新某使用者的權限（是否管理員 + 每間民宿的三個能力）。 */
