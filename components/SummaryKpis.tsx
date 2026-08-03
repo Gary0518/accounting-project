@@ -6,29 +6,20 @@ export default function SummaryKpis({
   s,
   periodLabel,
   propLabel,
-  year,
-  ytd,
 }: {
   s: MonthlySummary;
   periodLabel: string;
   propLabel: string;
-  year: number;
-  ytd: number;
 }) {
   return (
     <>
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <StatTile
           label={`期間損益 · ${propLabel}`}
           value={ntd(s.profit)}
           tone={s.profit < 0 ? "critical" : "good"}
           hero
           sub={periodLabel}
-        />
-        <StatTile
-          label={`${year} 年度累計`}
-          value={ntd(ytd)}
-          tone={ytd < 0 ? "critical" : "good"}
         />
         <StatTile label="加項（收入）" value={ntd(s.addition)} tone="good" />
         <StatTile label="減項（支出）" value={ntd(s.deduction)} tone="critical" />

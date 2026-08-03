@@ -9,7 +9,6 @@ import { loadDashboardData } from "@/lib/queries";
 import { getAccess, allowedPropertyIds, canAny } from "@/lib/access";
 import {
   summarize,
-  monthlyNetSeries,
   paymentNet,
   handlerNet,
   resolvePeriod,
@@ -44,11 +43,10 @@ export default async function CashflowPage({
   const mode = period.key === "year" ? "year" : "month";
   const monthNum = mode === "year" ? new Date().getMonth() + 1 : Number(period.start.slice(5, 7));
 
-  const { properties, rooms, days, year, entries, yearEntries, propLabel } =
+  const { properties, rooms, days, year, entries, propLabel } =
     await loadDashboardData(period, property, allowedPropertyIds(access, "cashflow"));
 
   const s = summarize(entries, rooms, days);
-  const ytd = monthlyNetSeries(yearEntries).reduce((a, b) => a + b.profit, 0);
 
   // 各收款方式淨收支（依所選期間）
   const netRows = paymentNet(entries).map((r) => ({ label: r.name, value: r.net }));
@@ -71,7 +69,7 @@ export default async function CashflowPage({
           year={year}
           monthNum={monthNum}
         />
-        <SummaryKpis s={s} periodLabel={period.label} propLabel={propLabel} year={year} ytd={ytd} />
+        <SummaryKpis s={s} periodLabel={period.label} propLabel={propLabel} />
 
         {/* 兩張圓餅：各收款方式的收入 / 支出比例（依所選期間） */}
         <section className="grid md:grid-cols-2 gap-5">

@@ -47,7 +47,6 @@ export default async function DashboardPage({
   const detail = [...entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
   const propName = new Map(properties.map((p) => [p.id, p.name]));
   const monthly = monthlyNetSeries(yearEntries);
-  const ytd = monthly.reduce((a, b) => a + b.profit, 0);
 
   return (
     <>
@@ -73,7 +72,7 @@ export default async function DashboardPage({
           營業數據 · {propLabel} · {period.label}
         </h1>
 
-        <SummaryKpis s={s} periodLabel={period.label} propLabel={propLabel} year={year} ytd={ytd} />
+        <SummaryKpis s={s} periodLabel={period.label} propLabel={propLabel} />
 
         <section className="grid md:grid-cols-2 gap-5">
           <BarList title="通路統計（收入來源）" rows={s.byChannel} />
