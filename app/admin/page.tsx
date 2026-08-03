@@ -142,7 +142,7 @@ async function OptionsSection() {
     name: p.name,
     amount: p.total_rooms,
   }));
-  // 清潔費是系統自動算的，不出現在支出科目的下拉選單，這裡也不讓它被誤刪
+  // 清潔費是系統每月底自動記的，不出現在支出科目的下拉選單，這裡也不讓它被誤刪
   const catItems = (dir: "income" | "expense"): OptionItem[] =>
     (cats ?? [])
       .filter((c) => c.direction === dir && c.name !== "清潔費")
@@ -185,7 +185,7 @@ async function OptionsSection() {
         <OptionManager
           table="categories"
           title="支出科目"
-          hint={`切到「支出」時的科目下拉。清潔費由系統自動計算（房間數 × ${CLEANING_FEE_PER_ROOM}，記在 ${CLEANING_HANDLER} / ${CLEANING_PAYMENT}），不在此管理。`}
+          hint={`切到「支出」時的科目下拉。清潔費由系統每月底自動記一筆（房間數 × ${CLEANING_FEE_PER_ROOM}，記在 ${CLEANING_HANDLER} / ${CLEANING_PAYMENT}），不在此管理。`}
           items={catItems("expense")}
           direction="expense"
           placeholder="例：修繕費"

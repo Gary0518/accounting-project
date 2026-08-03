@@ -124,8 +124,13 @@ export default function EntryTable({
             </td>
             {showActions && (
               <td className="p-3 text-right whitespace-nowrap">
-                {/* 續列沒有自己的按鈕：修改與刪除都是以整張訂單為單位 */}
-                {!cont && (
+                {/* 續列沒有自己的按鈕：修改與刪除都是以整張訂單為單位。
+                    清潔費是排程產生的，改了或刪了下次重算又會蓋回去，所以不給按鈕。 */}
+                {cont ? null : e.category === "清潔費" ? (
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    自動
+                  </span>
+                ) : (
                   <div className="flex gap-2 justify-end">
                     {editOptions && (
                       <EditEntryButton rows={group} options={editOptions} onSaved={onChanged} />

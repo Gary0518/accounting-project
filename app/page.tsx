@@ -44,7 +44,7 @@ export default async function EntriesPage() {
 
   const categories = {
     income: (cats ?? []).filter((c) => c.direction === "income").map((c) => c.name),
-    // 清潔費由系統自動計算（房間數 × 300），不開放人工輸入
+    // 清潔費由系統每月底自動記一筆（房間數 × 300），不開放人工輸入
     expense: (cats ?? [])
       .filter((c) => c.direction === "expense" && c.name !== "清潔費")
       .map((c) => c.name),
