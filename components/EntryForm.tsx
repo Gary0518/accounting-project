@@ -17,6 +17,19 @@ interface Categories {
   expense: string[];
 }
 
+/**
+ * 這些收入來源不是住宿，天數填了沒有意義（也算不出間數），所以天數欄位反白不讓填。
+ * 用「包含」比對而不是完全相同：科目名稱是設定頁可以改的，
+ * 「其他」與「其他收入」都算同一類。
+ */
+const NO_NIGHTS_CATEGORIES = ["租車", "其他"];
+const needsNights = (category: string) =>
+  !NO_NIGHTS_CATEGORIES.some((k) => category.includes(k));
+
+/** 沒填的欄位畫紅框；紅框比瀏覽器內建的提示泡泡好認，手機上也看得到。 */
+const invalidStyle = (bad: boolean) =>
+  bad ? { borderColor: "var(--critical)", outlineColor: "var(--critical)" } : undefined;
+
 export default function EntryForm({
   properties,
   propertyId,
@@ -58,9 +71,19 @@ export default function EntryForm({
   // 修改模式的民宿由表單自己管；新增模式交給外層（要記住上次選的那間）
   const [editProperty, setEditProperty] = useState(initial?.property_id ?? "");
   const formRef = useRef<HTMLFormElement>(null);
-  const propertyRef = useRef<HTMLSelectElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const cats = categories[direction];
+
+  // 科目與天數要互相牽動（租車 / 其他不填天數），所以這兩欄由 React 管值
+  const [category, setCategory] = useState(initial?.category ?? cats[0] ?? "");
+  const [nights, setNights] = useState(initial?.nights ?? "");
+  // 哪些欄位沒填好（按過送出才會有東西，不然一進來就滿江紅）
+  const [bad, setBad] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
+  // 連點兩下的第二下要在 React 重畫按鈕之前就擋掉，所以用 ref 而不是 pending state
+  const submitting = useRef(false);
+
+  const nightsLocked = direction === "income" && !needsNights(category);
 
   const currentProperty = editing ? editProperty : (propertyId ?? "");
   const changeProperty = (v: string) =>
@@ -85,7 +108,95 @@ export default function EntryForm({
   const setRoomCount = (key: string, v: string) =>
     setPicked((p) => ({ ...p, [key]: v }));
 
-  async function onSubmit(formData: FormData) {
+  const changeDirection = (d: "income" | "expense") => {
+    setDirection(d);
+    // 收入與支出的科目是兩組，換邊時把科目換成新那組的第一項
+    setCategory(categories[d][0] ?? "");
+    setBad({});
+  };
+
+  const changeCategory = (v: string) => {
+    setCategory(v);
+    // 換成不用填天數的科目（租車 / 其他）就把已填的天數清掉，
+    // 不然欄位反白了、值卻還留著，看起來像會被記進去
+    if (direction === "income" && !needsNights(v)) setNights("");
+  };
+
+  /** 檢查必填欄位，回傳沒填好的欄位名。 */
+  function findProblems(fd: FormData): Record<string, boolean> {
+    const str = (k: string) => String(fd.get(k) ?? "").trim();
+    const problems: Record<string, boolean> = {};
+    if (!str("entry_date")) problems.entry_date = true;
+    if (!str("category")) problems.category = true;
+    if (!str("payment_method")) problems.payment_method = true;
+    // 金額 0 是合法的（沖帳），空白與負數不是
+    const amount = str("amount");
+    if (amount === "" || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
+      problems.amount = true;
+    }
+    if (direction === "income") {
+      if (!str("guest_note")) problems.guest_note = true;
+      // 反白的天數欄位不送出，也不該檢查
+      if (!nightsLocked && !str("nights")) problems.nights = true;
+    }
+    return problems;
+  }
+
+  // 按過送出之後，邊改邊把紅框拿掉，不用再按一次才知道補好了沒
+  const recheck = () => {
+    if (!attempted || !formRef.current) return;
+    const problems = findProblems(new FormData(formRef.current));
+    setBad(problems);
+    if (!Object.keys(problems).length) setError(null);
+  };
+
+  /** 存檔成功後清空欄位。不用 form.reset()：那會把民宿也打回第一間。 */
+  function clearForm() {
+    const form = formRef.current;
+    if (form) {
+      const set = (name: string, v = "") => {
+        const el = form.elements.namedItem(name);
+        if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = v;
+      };
+      set("amount");
+      set("deposit");
+      set("guest_note");
+      set("channel");
+      set("memo");
+      set("payment_method");
+      set("deposit_payment_method", paymentMethods[0]?.name ?? "");
+      set("entry_date", today);
+    }
+    setNights("");
+    setCategory(categories[direction][0] ?? "");
+    // 房型的勾選狀態在 React 這邊，改 DOM 的值清不到
+    setPicked({});
+    setBad({});
+    setAttempted(false);
+  }
+
+  /**
+   * 自己接 submit（而不是用 <form action={...}>）：
+   * form action 在動作結束後會自動把表單清空，檢查沒過就退回時會連使用者剛打的內容一起清掉。
+   */
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    // 同一筆帳按兩次會存成兩筆，所以第二下直接不理它
+    if (submitting.current) return;
+    const formData = new FormData(e.currentTarget);
+
+    setAttempted(true);
+    const problems = findProblems(formData);
+    if (Object.keys(problems).length) {
+      setBad(problems);
+      setError("紅框的欄位還沒填好。");
+      // 捲到 / 聚焦第一個沒填的欄位，欄位多的時候不用自己找
+      const first = Object.keys(problems)[0];
+      formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
+      return;
+    }
+
+    submitting.current = true;
     setPending(true);
     setError(null);
     try {
@@ -97,18 +208,15 @@ export default function EntryForm({
         return; // 修改完視窗就關了，不用清空欄位
       }
       await createEntry(formData);
-      formRef.current?.reset();
-      // reset() 會把民宿打回選單第一項，但 React 這邊的值沒變、不會重畫，
-      // 所以要自己把記住的民宿寫回去，不然存完一筆就跳回第一間。
-      if (propertyRef.current) propertyRef.current.value = currentProperty;
-      // 房型的勾選狀態在 React 這邊，reset() 清不到，要自己清
-      setPicked({});
+      // 民宿不清：接著多半是繼續記同一間的帳
+      clearForm();
       onSaved?.();
       router.refresh();
     } catch {
       // 不外洩資料庫內部訊息，只給使用者可行動的提示
       setError(editing ? "修改失敗，請確認欄位後再試一次。" : "儲存失敗，請確認欄位後再試一次。");
     } finally {
+      submitting.current = false;
       setPending(false);
     }
   }
@@ -128,7 +236,11 @@ export default function EntryForm({
   return (
     <form
       ref={formRef}
-      action={onSubmit}
+      onSubmit={onSubmit}
+      // 自己檢查必填（畫紅框），不要瀏覽器的提示泡泡搶先擋下送出
+      noValidate
+      onInput={recheck}
+      onChange={recheck}
       className={`flex flex-col gap-2 form-compact${editing ? "" : " card p-3"}`}
     >
       {editing && <input type="hidden" name="booking_key" value={initial.bookingKey} />}
@@ -137,14 +249,14 @@ export default function EntryForm({
         <button
           type="button"
           style={tabStyle(direction === "income")}
-          onClick={() => setDirection("income")}
+          onClick={() => changeDirection("income")}
         >
           收入
         </button>
         <button
           type="button"
           style={tabStyle(direction === "expense")}
-          onClick={() => setDirection("expense")}
+          onClick={() => changeDirection("expense")}
         >
           支出
         </button>
@@ -158,7 +270,6 @@ export default function EntryForm({
             name="property_id"
             required
             className="field"
-            ref={propertyRef}
             value={currentProperty}
             onChange={(e) => changeProperty(e.target.value)}
           >
@@ -176,7 +287,9 @@ export default function EntryForm({
             name="entry_date"
             defaultValue={initial?.entry_date ?? today}
             required
+            aria-invalid={!!bad.entry_date}
             className="field"
+            style={invalidStyle(!!bad.entry_date)}
           />
         </div>
       </div>
@@ -184,7 +297,15 @@ export default function EntryForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">{direction === "income" ? "收入來源" : "支出科目"}</label>
-          <select name="category" required className="field" defaultValue={initial?.category ?? cats[0]}>
+          <select
+            name="category"
+            required
+            className="field"
+            value={category}
+            onChange={(e) => changeCategory(e.target.value)}
+            aria-invalid={!!bad.category}
+            style={invalidStyle(!!bad.category)}
+          >
             {cats.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -201,9 +322,11 @@ export default function EntryForm({
             step="1"
             required
             defaultValue={initial?.amount}
+            aria-invalid={!!bad.amount}
             className="field no-spin"
             inputMode="numeric"
             onWheel={(e) => e.currentTarget.blur()}
+            style={invalidStyle(!!bad.amount)}
           />
         </div>
       </div>
@@ -217,8 +340,12 @@ export default function EntryForm({
               name="payment_method"
               required
               className="field"
-              defaultValue={initial?.payment_method ?? paymentMethods[0]?.name}
+              // 預設空白：不選就不給存，免得整批帳都記成第一個方式
+              defaultValue={initial?.payment_method ?? ""}
+              aria-invalid={!!bad.payment_method}
+              style={invalidStyle(!!bad.payment_method)}
             >
+              <option value="">請選擇…</option>
               {paymentMethods.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
@@ -240,11 +367,15 @@ export default function EntryForm({
             <div>
               <label className="label">收款方式</label>
               <select
-              name="payment_method"
-              required
-              className="field"
-              defaultValue={initial?.payment_method ?? paymentMethods[0]?.name}
-            >
+                name="payment_method"
+                required
+                className="field"
+                // 預設空白：不選就不給存，免得整批帳都記成第一個方式
+                defaultValue={initial?.payment_method ?? ""}
+                aria-invalid={!!bad.payment_method}
+                style={invalidStyle(!!bad.payment_method)}
+              >
+                <option value="">請選擇…</option>
                 {paymentMethods.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
@@ -307,8 +438,11 @@ export default function EntryForm({
                 type="text"
                 name="guest_note"
                 defaultValue={initial?.guest_note}
+                required
+                aria-invalid={!!bad.guest_note}
                 className="field"
                 placeholder="房客姓名 / 備註"
+                style={invalidStyle(!!bad.guest_note)}
               />
             </div>
             <div>
@@ -318,9 +452,21 @@ export default function EntryForm({
                 name="nights"
                 min="0"
                 step="1"
-                defaultValue={initial?.nights}
+                value={nights}
+                onChange={(e) => setNights(e.target.value)}
+                // 租車 / 其他沒有天數可言：欄位反白，也不會送出
+                disabled={nightsLocked}
+                required={!nightsLocked}
+                aria-invalid={!!bad.nights}
                 className="field"
                 inputMode="numeric"
+                placeholder={nightsLocked ? "不需填" : undefined}
+                style={{
+                  ...invalidStyle(!!bad.nights),
+                  ...(nightsLocked
+                    ? { background: "var(--bar-track)", color: "var(--text-muted)", cursor: "not-allowed" }
+                    : null),
+                }}
               />
             </div>
           </div>
@@ -417,7 +563,13 @@ export default function EntryForm({
           type="submit"
           className="btn btn-primary"
           disabled={pending}
-          style={{ padding: "0.45rem 1.1rem", flex: 1 }}
+          // 存檔中整顆反白：不然看不出有沒有按到，會再按一次變成兩筆一樣的帳
+          style={{
+            padding: "0.45rem 1.1rem",
+            flex: 1,
+            opacity: pending ? 0.5 : 1,
+            cursor: pending ? "not-allowed" : "pointer",
+          }}
         >
           {pending ? "儲存中…" : editing ? "儲存修改" : "新增帳目"}
         </button>

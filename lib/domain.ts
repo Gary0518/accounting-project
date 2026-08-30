@@ -28,6 +28,14 @@ export interface Entry {
   memo: string | null;
 }
 
+/** 「最近帳目」的一頁（loadRecentEntries 的回傳值）。 */
+export interface RecentEntriesPage {
+  rows: Entry[];
+  /** 下一頁要從第幾列開始（補完訂單時會多吃幾列，不一定是 offset + 一頁列數） */
+  nextOffset: number;
+  hasMore: boolean;
+}
+
 /** 修改帳目時，表單要用的初始值（由一張訂單的那幾列攤平而來）。 */
 export interface EntryDraft {
   bookingKey: string; // booking_id ?? id，送回後端指定要改哪一張訂單

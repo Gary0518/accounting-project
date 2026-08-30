@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, allowedPropertyIds } from "@/lib/access";
-import { type Entry } from "@/lib/domain";
+import { type Entry, type RecentEntriesPage } from "@/lib/domain";
 import {
   canonical,
   parseWorkbook,
@@ -172,24 +172,45 @@ export async function updateEntry(formData: FormData) {
   revalidatePath("/cashflow");
 }
 
+// 「最近帳目」一頁幾列（同一張訂單的續列也算一列）
+const RECENT_PAGE_SIZE = 30;
+// 一頁結尾剛好切在多房型訂單中間時，最多再多帶幾列把那張訂單補完
+const RECENT_LOOKAHEAD = 10;
+
 /**
- * 讀取「最近帳目」面板的資料。
+ * 讀「最近帳目」的一頁。
  *
- * 進站時右邊面板是空的、不呼叫這裡，所以首頁少一趟查詢；使用者選了民宿才載入。
+ * 進站時右邊面板是空的、不呼叫這裡，所以首頁少一趟查詢；使用者選了民宿才載入；
+ * 往後的每一頁也是按了「下一頁」才去查。
+ *
+ * 用 offset 而不是頁碼：一頁結尾若切在多房型訂單中間，會多讀幾列把那張訂單補完
+ * （不然續列會單獨出現在下一頁最上面，看起來像一筆 0 元的帳），
+ * 實際吃掉的列數因此不固定，下一頁的起點由這裡回傳。
+ *
  * @param view 民宿 id 字串，或 "all" 代表全部（僅限自己看得到的那些）
+ * @param offset 這一頁從第幾列開始（第一頁 0）
  */
-export async function loadRecentEntries(view: string): Promise<Entry[]> {
+export async function loadRecentEntries(
+  view: string,
+  offset = 0,
+): Promise<RecentEntriesPage> {
+  const empty: RecentEntriesPage = { rows: [], nextOffset: 0, hasMore: false };
   const access = await getAccess();
   if (!access) throw new Error("尚未登入");
   // 與左邊表單同一組民宿：可輸入的才列得出來
   const allowed = allowedPropertyIds(access, "input");
+
+  const from = Math.max(0, Math.trunc(offset));
 
   const supabase = await createClient();
   let q = supabase
     .from("entries")
     .select("*")
     .order("entry_date", { ascending: false })
-    .limit(30);
+    // 同一張訂單的列要排在一起、且每次查詢順序固定，翻頁才不會有列重複或漏掉
+    .order("booking_id", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
+    .range(from, from + RECENT_PAGE_SIZE + RECENT_LOOKAHEAD - 1);
 
   if (view === "all") {
     // 管理員 allowed=null → 不加條件；一般人限縮在自己可輸入的民宿
@@ -197,9 +218,9 @@ export async function loadRecentEntries(view: string): Promise<Entry[]> {
     if (allowed) q = q.in("property_id", allowed.length ? allowed : [-1]);
   } else {
     const id = Number(view);
-    if (!Number.isFinite(id)) return [];
+    if (!Number.isFinite(id)) return empty;
     // RLS 已經擋一層，這裡再擋一次：沒權限的民宿一律當作沒有資料
-    if (allowed && !allowed.includes(id)) return [];
+    if (allowed && !allowed.includes(id)) return empty;
     q = q.eq("property_id", id);
   }
 
@@ -208,7 +229,21 @@ export async function loadRecentEntries(view: string): Promise<Entry[]> {
     console.error("loadRecentEntries failed:", error);
     throw new Error("讀取最近帳目失敗");
   }
-  return (data ?? []) as Entry[];
+
+  const fetched = (data ?? []) as Entry[];
+  const rows = fetched.slice(0, RECENT_PAGE_SIZE);
+  // 補完最後一張訂單：多讀的那幾列裡，凡是屬於本頁已出現的訂單就一起收進來
+  const keys = new Set(rows.map((e) => e.booking_id ?? e.id));
+  for (const e of fetched.slice(RECENT_PAGE_SIZE)) {
+    if (!keys.has(e.booking_id ?? e.id)) break;
+    rows.push(e);
+  }
+
+  return {
+    rows,
+    nextOffset: from + rows.length,
+    hasMore: fetched.length > rows.length,
+  };
 }
 
 /** 管理員：更新某使用者的權限（是否管理員 + 每間民宿的三個能力）。 */
