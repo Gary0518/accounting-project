@@ -31,12 +31,16 @@ export default function EntriesWorkspace({
   channels,
   roomTypes,
   categories,
+  filterCategories,
 }: {
   properties: Property[];
   paymentMethods: Option[];
   channels: Option[];
   roomTypes: Option[];
+  /** 表單「支出科目」用（不含清潔費） */
   categories: Categories;
+  /** 右邊明細的科目篩選用（含清潔費） */
+  filterCategories: Categories;
 }) {
   // 初值用第一間，讓伺服器與瀏覽器首次畫出來的內容一致（不然會 hydration 不符），
   // 掛載後再用 localStorage 蓋掉。
@@ -95,6 +99,7 @@ export default function EntriesWorkspace({
 
       <RecentEntries
         properties={properties}
+        filterCategories={filterCategories}
         view={view}
         onViewChange={setView}
         reloadToken={reloadToken}

@@ -11,6 +11,10 @@ interface Property {
   id: number;
   name: string;
 }
+interface Categories {
+  income: string[];
+  expense: string[];
+}
 
 // 翻頁鈕沒得按時淡掉（.btn 是純 CSS class，沒有 :disabled 樣式）
 const disabledStyle = (off: boolean) =>
@@ -25,18 +29,23 @@ const disabledStyle = (off: boolean) =>
  */
 export default function RecentEntries({
   properties,
+  filterCategories,
   view,
   onViewChange,
   reloadToken,
   editOptions,
 }: {
   properties: Property[];
+  /** 科目篩選的選項。比表單的 categories 多一個「清潔費」——它不給人工輸入，但帳上有，要能篩 */
+  filterCategories: Categories;
   view: string;
   onViewChange: (v: string) => void;
   reloadToken: number;
   /** 修改視窗要用的下拉選項 */
   editOptions: EntryFormOptions;
 }) {
+  // 空字串 = 全部科目。篩選是下到查詢裡的，不是只濾當頁。
+  const [category, setCategory] = useState("");
   const [rows, setRows] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +63,8 @@ export default function RecentEntries({
   // 換民宿、或自己剛存了一筆帳 → 回到第一頁（底下的列全變了，停在第 3 頁沒有意義）。
   // 在 render 當下改，effect 才不會先用舊的頁碼多查一次。
   // 同事那邊的異動（tick）不重設頁碼，只重新載入目前這頁，免得看舊帳看到一半被彈回第一頁。
-  const resetKey = `${view}|${reloadToken}`;
+  // 換科目跟換民宿一樣：底下的列全變了，頁碼要回到第一頁
+  const resetKey = `${view}|${category}|${reloadToken}`;
   const [seenResetKey, setSeenResetKey] = useState(resetKey);
   if (resetKey !== seenResetKey) {
     setSeenResetKey(resetKey);
@@ -87,7 +97,7 @@ export default function RecentEntries({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    loadRecentEntries(view, offsets[page])
+    loadRecentEntries(view, offsets[page], category)
       .then((data) => {
         if (cancelled) return;
         setRows(data.rows);
@@ -104,7 +114,7 @@ export default function RecentEntries({
     return () => {
       cancelled = true;
     };
-  }, [view, offsets, page, tick]);
+  }, [view, category, offsets, page, tick]);
 
   const propName = new Map(properties.map((p) => [p.id, p.name]));
 
@@ -112,21 +122,53 @@ export default function RecentEntries({
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between gap-3 p-4 pb-2 flex-wrap">
         <h2 className="font-semibold">最近帳目</h2>
-        <select
-          className="field"
-          value={view}
-          onChange={(e) => onViewChange(e.target.value)}
-          aria-label="要看哪間民宿的最近帳目"
-          style={{ width: "auto", maxWidth: "100%", padding: "0.35rem 0.5rem", fontSize: "0.9rem" }}
-        >
-          <option value="">選擇民宿…</option>
-          {properties.map((p) => (
-            <option key={p.id} value={String(p.id)}>
-              {p.name}
-            </option>
-          ))}
-          <option value="all">全部民宿</option>
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            className="field"
+            value={view}
+            onChange={(e) => onViewChange(e.target.value)}
+            aria-label="要看哪間民宿的最近帳目"
+            style={{ width: "auto", maxWidth: "100%", padding: "0.35rem 0.5rem", fontSize: "0.9rem" }}
+          >
+            <option value="">選擇民宿…</option>
+            {properties.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.name}
+              </option>
+            ))}
+            <option value="all">全部民宿</option>
+          </select>
+          <select
+            className="field"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            aria-label="篩選科目"
+            disabled={!view}
+            style={{
+              width: "auto",
+              maxWidth: "100%",
+              padding: "0.35rem 0.5rem",
+              fontSize: "0.9rem",
+              opacity: view ? 1 : 0.5,
+            }}
+          >
+            <option value="">全部科目</option>
+            <optgroup label="收入">
+              {filterCategories.income.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="支出">
+              {filterCategories.expense.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
       </div>
 
       {!view ? (
@@ -150,7 +192,13 @@ export default function RecentEntries({
               showActions
               editOptions={editOptions}
               onChanged={() => setTick((t) => t + 1)}
-              emptyText={page === 0 ? "這間民宿還沒有帳目。" : "這一頁沒有帳目了。"}
+              emptyText={
+                page > 0
+                  ? "這一頁沒有帳目了。"
+                  : category
+                    ? `這間民宿沒有「${category}」的帳目。`
+                    : "這間民宿還沒有帳目。"
+              }
             />
           </div>
           {(page > 0 || hasMore) && (

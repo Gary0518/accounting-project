@@ -193,6 +193,7 @@ const RECENT_LOOKAHEAD = 10;
 export async function loadRecentEntries(
   view: string,
   offset = 0,
+  category = "",
 ): Promise<RecentEntriesPage> {
   const empty: RecentEntriesPage = { rows: [], nextOffset: 0, hasMore: false };
   const access = await getAccess();
@@ -223,6 +224,10 @@ export async function loadRecentEntries(
     if (allowed && !allowed.includes(id)) return empty;
     q = q.eq("property_id", id);
   }
+
+  // 科目篩選必須下到查詢裡：這裡是分頁撈的，只在前端濾當頁會變成「每頁筆數忽多忽少」。
+  // 多房型訂單的續列與主列科目相同，所以整張訂單會一起留下或一起被濾掉。
+  if (category) q = q.eq("category", category);
 
   const { data, error } = await q;
   if (error) {

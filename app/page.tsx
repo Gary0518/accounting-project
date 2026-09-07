@@ -42,12 +42,17 @@ export default async function EntriesPage() {
     supabase.from("categories").select("name, direction").eq("active", true).order("sort_order"),
   ]);
 
+  // 表單用：清潔費由系統每月底自動記一筆（房間數 × 300），不開放人工輸入
   const categories = {
     income: (cats ?? []).filter((c) => c.direction === "income").map((c) => c.name),
-    // 清潔費由系統每月底自動記一筆（房間數 × 300），不開放人工輸入
     expense: (cats ?? [])
       .filter((c) => c.direction === "expense" && c.name !== "清潔費")
       .map((c) => c.name),
+  };
+  // 篩選用：清潔費不能輸入，但帳上有，明細要篩得到
+  const filterCategories = {
+    income: categories.income,
+    expense: (cats ?? []).filter((c) => c.direction === "expense").map((c) => c.name),
   };
   // 只保留這位使用者「可輸入」的民宿（管理員 allowed=null → 全部）
   const props = (properties ?? []).filter(
@@ -65,6 +70,7 @@ export default async function EntriesPage() {
         channels={channels ?? []}
         roomTypes={roomTypes ?? []}
         categories={categories}
+        filterCategories={filterCategories}
       />
     </>
   );
