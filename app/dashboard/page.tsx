@@ -5,7 +5,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import FilterBar from "@/components/FilterBar";
 import SummaryKpis from "@/components/SummaryKpis";
 import { BarList, RoomTypeTable, MonthlyPnl } from "@/components/dashboard";
-import EntryTable from "@/components/EntryTable";
+import EntryDetail from "@/components/EntryDetail";
 import PrintButton from "@/components/PrintButton";
 import { loadDashboardData } from "@/lib/queries";
 import { getAccess, allowedPropertyIds, canAny } from "@/lib/access";
@@ -45,7 +45,6 @@ export default async function DashboardPage({
   const s = summarize(entries, rooms, days);
   // 明細用：查詢是日期由舊到新，明細要最新的在上面
   const detail = [...entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
-  const propName = new Map(properties.map((p) => [p.id, p.name]));
   const monthly = monthlyNetSeries(yearEntries);
 
   return (
@@ -81,22 +80,13 @@ export default async function DashboardPage({
           <MonthlyPnl data={monthly} />
         </section>
 
-        {/* 原始帳目：跟著上方的民宿與期間篩選走（entries 已經過濾好了） */}
-        <section className="card overflow-hidden">
-          <div className="flex items-baseline justify-between gap-3 p-4 pb-2 flex-wrap">
-            <h2 className="font-semibold">帳目明細</h2>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {propLabel} · {period.label} · {detail.length} 筆
-            </span>
-          </div>
-          <div className="overflow-x-auto scroll-box">
-            <EntryTable
-              rows={detail}
-              propName={propName}
-              emptyText="這段期間沒有帳目。"
-            />
-          </div>
-        </section>
+        {/* 原始帳目：跟著上方的民宿與期間篩選走（entries 已經過濾好了），科目再篩由該元件自己處理 */}
+        <EntryDetail
+          rows={detail}
+          properties={properties}
+          propLabel={propLabel}
+          periodLabel={period.label}
+        />
       </main>
     </>
   );

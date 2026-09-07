@@ -89,7 +89,13 @@ export default function EntryTable({
                 ""
               ) : (
                 <>
-                  {[e.guest_note, e.channel].filter(Boolean).join(" · ") || "—"}
+                  {/* 通路來源用紅字標出來，一眼就能分辨是哪個平台來的訂單 */}
+                  {e.guest_note}
+                  {e.guest_note && e.channel ? " · " : null}
+                  {e.channel && (
+                    <span style={{ color: "var(--channel-text)" }}>{e.channel}</span>
+                  )}
+                  {!e.guest_note && !e.channel ? "—" : null}
                   {e.memo && (
                     <div className="text-xs" style={{ color: "var(--text-muted)" }}>
                       備註：{e.memo}

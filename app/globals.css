@@ -19,6 +19,8 @@
   --good: #0ca30c;
   --good-text: #006300;
   --critical: #d03b3b;
+  /* 通路來源用的紅：比 --critical 再暗一點的磚紅，長時間看不刺眼 */
+  --channel-text: #b83227;
 
   /* 類別色（圓餅圖用；已通過 CVD / 對比驗證）*/
   --cat-1: #2a78d6;
@@ -47,6 +49,7 @@
     --good: #0ca30c;
     --good-text: #0ca30c;
     --critical: #e66767;
+    --channel-text: #f08a80;
 
     --cat-1: #3987e5;
     --cat-2: #199e70;
@@ -185,6 +188,7 @@ body {
     --border: rgba(0, 0, 0, 0.22);
     --grid: #cccccc;
     --bar-track: #e8e8e8;
+    --channel-text: #b83227;
   }
   html,
   body {
