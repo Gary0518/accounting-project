@@ -18,13 +18,19 @@ interface Categories {
 }
 
 /**
- * 這些收入來源不是住宿，天數填了沒有意義（也算不出間數），所以天數欄位反白不讓填。
+ * 只有住宿費才有房客、天數與房間可言；租車、傭金之類的收入來源填了沒有意義
+ * （也算不出間數），所以「入住說明 / 天數 / 房型間數」整區反白不讓填、也不送出。
  * 用「包含」比對而不是完全相同：科目名稱是設定頁可以改的，
- * 「其他」與「其他收入」都算同一類。
+ * 「住宿費」與「住宿費用」都算同一類。
  */
-const NO_NIGHTS_CATEGORIES = ["租車", "其他"];
-const needsNights = (category: string) =>
-  !NO_NIGHTS_CATEGORIES.some((k) => category.includes(k));
+const isLodging = (category: string) => category.includes("住宿");
+
+/** 反白（鎖住）的欄位長相：灰底灰字 + 禁止游標。 */
+const lockedStyle = {
+  background: "var(--bar-track)",
+  color: "var(--text-muted)",
+  cursor: "not-allowed",
+} as const;
 
 /** 沒填的欄位畫紅框；紅框比瀏覽器內建的提示泡泡好認，手機上也看得到。 */
 const invalidStyle = (bad: boolean) =>
@@ -77,13 +83,15 @@ export default function EntryForm({
   // 科目與天數要互相牽動（租車 / 其他不填天數），所以這兩欄由 React 管值
   const [category, setCategory] = useState(initial?.category ?? cats[0] ?? "");
   const [nights, setNights] = useState(initial?.nights ?? "");
+  const [guestNote, setGuestNote] = useState(initial?.guest_note ?? "");
   // 哪些欄位沒填好（按過送出才會有東西，不然一進來就滿江紅）
   const [bad, setBad] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
   // 連點兩下的第二下要在 React 重畫按鈕之前就擋掉，所以用 ref 而不是 pending state
   const submitting = useRef(false);
 
-  const nightsLocked = direction === "income" && !needsNights(category);
+  // 非住宿的收入來源：入住說明 / 天數 / 房型間數整區鎖起來
+  const stayLocked = direction === "income" && !isLodging(category);
 
   const currentProperty = editing ? editProperty : (propertyId ?? "");
   const changeProperty = (v: string) =>
@@ -111,15 +119,26 @@ export default function EntryForm({
   const changeDirection = (d: "income" | "expense") => {
     setDirection(d);
     // 收入與支出的科目是兩組，換邊時把科目換成新那組的第一項
-    setCategory(categories[d][0] ?? "");
+    const next = categories[d][0] ?? "";
+    setCategory(next);
+    // 換到的科目不是住宿的話，住宿那區照樣清空（同 changeCategory）
+    if (d === "expense" || !isLodging(next)) {
+      setNights("");
+      setGuestNote("");
+      setPicked({});
+    }
     setBad({});
   };
 
   const changeCategory = (v: string) => {
     setCategory(v);
-    // 換成不用填天數的科目（租車 / 其他）就把已填的天數清掉，
+    // 換成非住宿的科目就把住宿那區已填的內容清掉，
     // 不然欄位反白了、值卻還留著，看起來像會被記進去
-    if (direction === "income" && !needsNights(v)) setNights("");
+    if (direction === "income" && !isLodging(v)) {
+      setNights("");
+      setGuestNote("");
+      setPicked({});
+    }
   };
 
   /** 檢查必填欄位，回傳沒填好的欄位名。 */
@@ -134,10 +153,10 @@ export default function EntryForm({
     if (amount === "" || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
       problems.amount = true;
     }
-    if (direction === "income") {
+    // 反白的欄位不送出，也不該檢查
+    if (direction === "income" && !stayLocked) {
       if (!str("guest_note")) problems.guest_note = true;
-      // 反白的天數欄位不送出，也不該檢查
-      if (!nightsLocked && !str("nights")) problems.nights = true;
+      if (!str("nights")) problems.nights = true;
     }
     return problems;
   }
@@ -160,7 +179,6 @@ export default function EntryForm({
       };
       set("amount");
       set("deposit");
-      set("guest_note");
       set("channel");
       set("memo");
       set("payment_method");
@@ -168,6 +186,7 @@ export default function EntryForm({
       set("entry_date", today);
     }
     setNights("");
+    setGuestNote("");
     setCategory(categories[direction][0] ?? "");
     // 房型的勾選狀態在 React 這邊，改 DOM 的值清不到
     setPicked({});
@@ -437,12 +456,18 @@ export default function EntryForm({
               <input
                 type="text"
                 name="guest_note"
-                defaultValue={initial?.guest_note}
-                required
+                value={guestNote}
+                onChange={(e) => setGuestNote(e.target.value)}
+                // 非住宿的收入來源沒有房客可言：欄位反白，也不會送出
+                disabled={stayLocked}
+                required={!stayLocked}
                 aria-invalid={!!bad.guest_note}
                 className="field"
-                placeholder="房客姓名 / 備註"
-                style={invalidStyle(!!bad.guest_note)}
+                placeholder={stayLocked ? "不需填" : "房客姓名 / 備註"}
+                style={{
+                  ...invalidStyle(!!bad.guest_note),
+                  ...(stayLocked ? lockedStyle : null),
+                }}
               />
             </div>
             <div>
@@ -454,18 +479,16 @@ export default function EntryForm({
                 step="1"
                 value={nights}
                 onChange={(e) => setNights(e.target.value)}
-                // 租車 / 其他沒有天數可言：欄位反白，也不會送出
-                disabled={nightsLocked}
-                required={!nightsLocked}
+                // 非住宿的收入來源沒有天數可言：欄位反白，也不會送出
+                disabled={stayLocked}
+                required={!stayLocked}
                 aria-invalid={!!bad.nights}
                 className="field"
                 inputMode="numeric"
-                placeholder={nightsLocked ? "不需填" : undefined}
+                placeholder={stayLocked ? "不需填" : undefined}
                 style={{
                   ...invalidStyle(!!bad.nights),
-                  ...(nightsLocked
-                    ? { background: "var(--bar-track)", color: "var(--text-muted)", cursor: "not-allowed" }
-                    : null),
+                  ...(stayLocked ? lockedStyle : null),
                 }}
               />
             </div>
@@ -474,10 +497,16 @@ export default function EntryForm({
           {/* 房型全部列出來，勾了才填間數（大床房 ×1 + 小床房 ×2 = 一張訂單兩列）。
               天數是整張訂單共用的，所以不在這裡重複填。 */}
           <div>
-            <label className="label">房型 / 間數（可複選）</label>
+            <label className="label" style={stayLocked ? { color: "var(--text-muted)" } : undefined}>
+              房型 / 間數（可複選）{stayLocked && "－不需填"}
+            </label>
             {/* 一個房型一列會把表單拉得很長，改成會自動換行的標籤，
                 只有勾起來的才展開右邊的間數框 */}
-            <div className="flex flex-wrap gap-1.5">
+            <div
+              className="flex flex-wrap gap-1.5"
+              // 非住宿的收入來源算不出間數：整區反白不讓勾
+              style={stayLocked ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            >
               {roomOptions.map(({ key, name, label }) => {
                 const on = key in picked;
                 return (
@@ -488,23 +517,31 @@ export default function EntryForm({
                       padding: on ? "0.15rem 0.3rem 0.15rem 0.5rem" : "0.25rem 0.55rem",
                       borderRadius: 8,
                       border: "1px solid var(--border)",
-                      background: on ? "var(--bar-track)" : "transparent",
+                      background: stayLocked || on ? "var(--bar-track)" : "transparent",
                     }}
                   >
                     <label
                       className="flex items-center gap-1.5"
-                      style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                      style={{
+                        cursor: stayLocked ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       <input
                         type="checkbox"
                         checked={on}
+                        disabled={stayLocked}
                         onChange={() => toggleRoomType(key)}
                         style={{ width: 15, height: 15, flex: "none", accentColor: "var(--series-1)" }}
                       />
                       <span
                         className="text-sm"
                         style={{
-                          color: on ? "var(--text-primary)" : "var(--text-secondary)",
+                          color: stayLocked
+                            ? "var(--text-muted)"
+                            : on
+                              ? "var(--text-primary)"
+                              : "var(--text-secondary)",
                           fontWeight: on ? 600 : 400,
                         }}
                       >
