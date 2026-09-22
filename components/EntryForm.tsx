@@ -25,6 +25,22 @@ interface Categories {
  */
 const isLodging = (category: string) => category.includes("住宿");
 
+/**
+ * 選了這些通路，收款方式自動帶入對應的帳戶（之後仍可手動改；訂金的收款方式不帶）。
+ * 沒列的通路不自動帶。比對時忽略大小寫與空白：設定頁的名稱寫法不一定一致，
+ * 「expedia」「外匯入帳- Expedia」都要對得到；對應的收款方式在設定頁不存在就不帶。
+ */
+const CHANNEL_PAYMENT: Record<string, string> = {
+  trip: "外匯入帳-TRIP",
+  expedia: "外匯入帳-Expedia",
+  agoda: "外匯入帳-Agoda",
+  立榮: "應收旅行社",
+  華信: "應收旅行社",
+  樂咖: "應收旅行社",
+  大玩咖: "應收旅行社",
+};
+const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+
 /** 反白（鎖住）的欄位長相：灰底灰字 + 禁止游標。 */
 const lockedStyle = {
   background: "var(--bar-track)",
@@ -96,6 +112,15 @@ export default function EntryForm({
   const currentProperty = editing ? editProperty : (propertyId ?? "");
   const changeProperty = (v: string) =>
     editing ? setEditProperty(v) : onPropertyChange?.(v);
+
+  // 選通路 → 收款方式自動帶入對應帳戶（收款方式是非受控欄位，直接改 DOM 的值）
+  const fillPaymentFromChannel = (channel: string) => {
+    const target = CHANNEL_PAYMENT[norm(channel)];
+    if (!target) return;
+    const match = paymentMethods.find((p) => norm(p.name) === norm(target));
+    const select = formRef.current?.querySelector<HTMLSelectElement>('[name="payment_method"]');
+    if (match && select) select.value = match.name;
+  };
 
   // 「未指定」也列一格：以前房型下拉有這個選項，有人只記間數不記房型，
   // 拿掉的話那種訂單就算不出清潔費了。
@@ -391,6 +416,7 @@ export default function EntryForm({
                 required
                 className="field"
                 defaultValue={initial?.channel ?? ""}
+                onChange={(e) => fillPaymentFromChannel(e.target.value)}
                 aria-invalid={!!bad.channel}
                 style={invalidStyle(!!bad.channel)}
               >
