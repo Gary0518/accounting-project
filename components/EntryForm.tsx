@@ -380,10 +380,28 @@ export default function EntryForm({
         </div>
       )}
 
-      {/* 收入：收款方式 + 訂金相關 + 訂房 / 房型欄位 */}
+      {/* 收入：通路 + 收款方式（上下兩排）+ 訂金相關 + 訂房 / 房型欄位 */}
       {direction === "income" && (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2">
+            <div>
+              <label className="label">來源（通路）</label>
+              <select
+                name="channel"
+                required
+                className="field"
+                defaultValue={initial?.channel ?? ""}
+                aria-invalid={!!bad.channel}
+                style={invalidStyle(!!bad.channel)}
+              >
+                <option value="">請選擇…</option>
+                {channels.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="label">收款方式</label>
               <select
@@ -399,24 +417,6 @@ export default function EntryForm({
                 {paymentMethods.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">來源（通路）</label>
-              <select
-                name="channel"
-                required
-                className="field"
-                defaultValue={initial?.channel ?? ""}
-                aria-invalid={!!bad.channel}
-                style={invalidStyle(!!bad.channel)}
-              >
-                <option value="">請選擇…</option>
-                {channels.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
                   </option>
                 ))}
               </select>
