@@ -404,7 +404,8 @@ export async function removeOption(formData: FormData) {
 
 /**
  * 修改一個下拉選項的名稱（民宿還可改可售房間數）。
- * 不動 active／sort_order，歷史帳目也不受影響（帳目存的是當時的文字）。
+ * 不動 active／sort_order。帳目存的是選項文字，改名時由資料庫 trigger 把歷史帳目的舊名
+ * 一併換成新名（見 supabase/migration_option_rename.sql），不會留下新舊兩個欄位。
  */
 export async function updateOption(formData: FormData) {
   await requireAdmin();
