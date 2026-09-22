@@ -155,7 +155,8 @@ export async function updateEntry(formData: FormData) {
     if (i < rows.length && i < old.length) {
       ops.push(supabase.from("entries").update(rows[i]).eq("id", old[i].id));
     } else if (i < rows.length) {
-      ops.push(supabase.from("entries").insert(rows[i]));
+      // 修改時多加的房型列，建立人員仍算原本建單的人
+      ops.push(supabase.from("entries").insert({ ...rows[i], created_by: old[0].created_by }));
     } else {
       ops.push(supabase.from("entries").delete().eq("id", old[i].id));
     }

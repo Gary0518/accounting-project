@@ -26,6 +26,7 @@ export interface Entry {
   booking_id: string | null;
   handler: string | null;
   memo: string | null;
+  created_by?: string | null; // 建立人員（建這筆帳的帳號 ID）
 }
 
 /** 「最近帳目」的一頁（loadRecentEntries 的回傳值）。 */
@@ -128,7 +129,7 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 // 要改金額或改記在誰頭上，兩邊都要改。
 export const CLEANING_FEE_PER_ROOM = 300;
 export const CLEANING_HANDLER = "黃志剛";
-export const CLEANING_PAYMENT = "現金（志剛、怡安）";
+export const CLEANING_PAYMENT = "現金志剛";
 
 /** 住宿列：有填房間數的住宿費收入（多房型的訂單會有多列）。 */
 const staysOf = (entries: Entry[]) =>

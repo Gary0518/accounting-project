@@ -19,7 +19,7 @@ interface Categories {
 
 /**
  * 只有住宿費才有房客、天數與房間可言；租車、傭金之類的收入來源填了沒有意義
- * （也算不出間數），所以「入住說明 / 天數 / 房型間數」整區反白不讓填、也不送出。
+ * （也算不出間數），所以「入住人 / 天數 / 房型間數」整區反白不讓填、也不送出。
  * 用「包含」比對而不是完全相同：科目名稱是設定頁可以改的，
  * 「住宿費」與「住宿費用」都算同一類。
  */
@@ -90,7 +90,7 @@ export default function EntryForm({
   // 連點兩下的第二下要在 React 重畫按鈕之前就擋掉，所以用 ref 而不是 pending state
   const submitting = useRef(false);
 
-  // 非住宿的收入來源：入住說明 / 天數 / 房型間數整區鎖起來
+  // 非住宿的收入來源：入住人 / 天數 / 房型間數整區鎖起來
   const stayLocked = direction === "income" && !isLodging(category);
 
   const currentProperty = editing ? editProperty : (propertyId ?? "");
@@ -154,6 +154,7 @@ export default function EntryForm({
       problems.amount = true;
     }
     // 反白的欄位不送出，也不該檢查
+    if (direction === "income" && !str("channel")) problems.channel = true;
     if (direction === "income" && !stayLocked) {
       if (!str("guest_note")) problems.guest_note = true;
       if (!str("nights")) problems.nights = true;
@@ -182,7 +183,7 @@ export default function EntryForm({
       set("channel");
       set("memo");
       set("payment_method");
-      set("deposit_payment_method", paymentMethods[0]?.name ?? "");
+      set("deposit_payment_method");
       set("entry_date", today);
     }
     setNights("");
@@ -404,8 +405,15 @@ export default function EntryForm({
             </div>
             <div>
               <label className="label">來源（通路）</label>
-              <select name="channel" className="field" defaultValue={initial?.channel ?? ""}>
-                <option value="">未指定</option>
+              <select
+                name="channel"
+                required
+                className="field"
+                defaultValue={initial?.channel ?? ""}
+                aria-invalid={!!bad.channel}
+                style={invalidStyle(!!bad.channel)}
+              >
+                <option value="">請選擇…</option>
                 {channels.map((c) => (
                   <option key={c.name} value={c.name}>
                     {c.name}
@@ -439,8 +447,9 @@ export default function EntryForm({
               <select
                 name="deposit_payment_method"
                 className="field"
-                defaultValue={initial?.deposit_payment_method ?? paymentMethods[0]?.name}
+                defaultValue={initial?.deposit_payment_method ?? ""}
               >
+                <option value="">請選擇…</option>
                 {paymentMethods.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
@@ -452,7 +461,7 @@ export default function EntryForm({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="label">入住說明</label>
+              <label className="label">入住人</label>
               <input
                 type="text"
                 name="guest_note"

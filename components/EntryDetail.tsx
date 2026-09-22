@@ -4,6 +4,37 @@ import { useMemo, useState } from "react";
 import EntryTable from "@/components/EntryTable";
 import { type Entry } from "@/lib/domain";
 
+/** 一列帳目裡所有能搜的文字（表上看得到的欄位，加上收款方式、經手人這些表上沒列的）。 */
+function searchText(e: Entry, propName: Map<number, string>): string {
+  const total = e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0);
+  return [
+    e.entry_date,
+    e.property_id ? propName.get(e.property_id) : null,
+    e.direction === "income" ? "收入" : "支出",
+    e.category,
+    e.room_type,
+    e.rooms,
+    e.nights,
+    e.room_nights,
+    e.guest_note,
+    e.channel,
+    e.memo,
+    e.payment_method,
+    e.deposit_payment_method,
+    // 金額用原始數字與千分位兩種寫法，打「3000」或「3,000」都找得到
+    e.amount,
+    e.amount.toLocaleString("en-US"),
+    e.deposit || null,
+    total,
+    total.toLocaleString("en-US"),
+    e.handler,
+    e.created_by,
+  ]
+    .filter((v) => v !== null && v !== undefined && v !== "")
+    .join(" ")
+    .toLowerCase();
+}
+
 /**
  * 營業數據頁的「帳目明細」區塊。
  *
@@ -23,6 +54,8 @@ export default function EntryDetail({
   periodLabel: string;
 }) {
   const [category, setCategory] = useState("all");
+  const [keyword, setKeyword] = useState("");
+  const propName = useMemo(() => new Map(properties.map((p) => [p.id, p.name])), [properties]);
 
   // 選單只列這段期間真的出現過的科目，收入在前、支出在後（同一組再按筆數多的排前面）
   const options = useMemo(() => {
@@ -48,13 +81,40 @@ export default function EntryDetail({
 
   // 期間一換，原本選的科目可能整個不存在了；不重設會看到一張空表
   const active = category !== "all" && rows.some((e) => e.category === category) ? category : "all";
-  const detail = active === "all" ? rows : rows.filter((e) => e.category === active);
+  const byCategory = active === "all" ? rows : rows.filter((e) => e.category === active);
+
+  // 關鍵字用空白隔開、每個都要對到（「agoda 大床」= 同時有 agoda 和大床）。
+  // 以整張訂單為單位比對：多房型訂單只要其中一列對到就整張留下，
+  // 不然只剩一列續列的話，明細表會把它當成第一列、金額顯示成 0。
+  const terms = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const bookingText = new Map<string, string>();
+  if (terms.length) {
+    for (const e of byCategory) {
+      const k = e.booking_id ?? e.id;
+      bookingText.set(k, (bookingText.get(k) ?? "") + " " + searchText(e, propName));
+    }
+  }
+  const detail = terms.length
+    ? byCategory.filter((e) => {
+        const text = bookingText.get(e.booking_id ?? e.id) ?? "";
+        return terms.every((t) => text.includes(t));
+      })
+    : byCategory;
 
   return (
     <section className="card overflow-hidden">
       <div className="flex items-baseline justify-between gap-3 p-4 pb-2 flex-wrap">
         <h2 className="font-semibold">帳目明細</h2>
         <div className="flex items-baseline gap-3 flex-wrap">
+          <input
+            type="search"
+            className="field no-print"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="搜尋任何欄位…"
+            aria-label="搜尋明細"
+            style={{ width: "12rem", padding: "0.3rem 0.5rem", fontSize: "0.85rem" }}
+          />
           <select
             className="field no-print"
             value={active}
@@ -84,15 +144,22 @@ export default function EntryDetail({
           </select>
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             {propLabel} · {periodLabel}
-            {active === "all" ? "" : ` · ${active}`} · {detail.length} 筆
+            {active === "all" ? "" : ` · ${active}`}
+            {terms.length ? ` · 「${keyword.trim()}」` : ""} · {detail.length} 筆
           </span>
         </div>
       </div>
       <div className="overflow-x-auto scroll-box">
         <EntryTable
           rows={detail}
-          propName={new Map(properties.map((p) => [p.id, p.name]))}
-          emptyText={active === "all" ? "這段期間沒有帳目。" : `這段期間沒有「${active}」的帳目。`}
+          propName={propName}
+          emptyText={
+            terms.length
+              ? `找不到符合「${keyword.trim()}」的帳目。`
+              : active === "all"
+                ? "這段期間沒有帳目。"
+                : `這段期間沒有「${active}」的帳目。`
+          }
         />
       </div>
     </section>

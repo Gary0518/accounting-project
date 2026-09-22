@@ -35,7 +35,7 @@ declare
   month_end   date := (date_trunc('month', target_month) + interval '1 month' - interval '1 day')::date;
   fee_per_room constant numeric := 300;
   cleaning_handler constant text := '黃志剛';
-  cleaning_payment constant text := '現金（志剛、怡安）';
+  cleaning_payment constant text := '現金志剛';
   affected integer;
 begin
   -- 3a. 該月已經沒有任何住宿了（帳被刪光或改掉）→ 收掉先前產生的那列
@@ -77,6 +77,8 @@ begin
   on conflict (property_id, entry_date) where category = '清潔費'
   do update set
     amount = excluded.amount,
+    payment_method = excluded.payment_method,
+    handler = excluded.handler,
     memo = excluded.memo,
     updated_at = now();
 

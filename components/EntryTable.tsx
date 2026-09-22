@@ -47,7 +47,7 @@ export default function EntryTable({
     return ordered.map((entry, i) => ({ entry, cont: i > 0, group: ordered }));
   });
 
-  const cols = showActions ? 9 : 8;
+  const cols = showActions ? 10 : 9;
 
   return (
     <table className="w-full text-sm">
@@ -61,6 +61,7 @@ export default function EntryTable({
           <th className="p-3 font-medium text-center whitespace-nowrap">間數</th>
           <th className="p-3 font-medium">說明</th>
           <th className="p-3 font-medium text-right">金額</th>
+          <th className="p-3 font-medium whitespace-nowrap">建立人員</th>
           {showActions && <th className="p-3"></th>}
         </tr>
       </thead>
@@ -127,6 +128,9 @@ export default function EntryTable({
                   )}
                 </>
               )}
+            </td>
+            <td className="p-3 text-xs tabular whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+              {cont ? "" : e.created_by ?? "—"}
             </td>
             {showActions && (
               <td className="p-3 text-right whitespace-nowrap">
