@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEntry, updateEntry } from "@/app/actions";
 import { type EntryDraft } from "@/lib/domain";
@@ -141,6 +141,10 @@ export default function EntryForm({
   const setRoomCount = (key: string, v: string) =>
     setPicked((p) => ({ ...p, [key]: v }));
 
+  /** 勾了卻沒填（或填 0）的間數：整區紅框看不出是哪個房型，那一格自己也要紅。 */
+  const roomCountBad = (v: string) =>
+    !!bad.rooms && (v.trim() === "" || !Number.isFinite(Number(v)) || Number(v) < 1);
+
   const changeDirection = (d: "income" | "expense") => {
     setDirection(d);
     // 收入與支出的科目是兩組，換邊時把科目換成新那組的第一項
@@ -183,6 +187,16 @@ export default function EntryForm({
     if (direction === "income" && !stayLocked) {
       if (!str("guest_note")) problems.guest_note = true;
       if (!str("nights")) problems.nights = true;
+      // 房型 / 間數：至少勾一個，而且每個勾起來的都要填 ≥1 的間數。
+      // 這裡讀 picked（React state）而不是 FormData：勾選的那一瞬間，
+      // 隱藏的 room_type / rooms 欄位還沒被 React 畫進 DOM，FormData 會讀到舊的。
+      const counts = Object.values(picked);
+      if (
+        !counts.length ||
+        counts.some((v) => v.trim() === "" || !Number.isFinite(Number(v)) || Number(v) < 1)
+      ) {
+        problems.rooms = true;
+      }
     }
     return problems;
   }
@@ -194,6 +208,11 @@ export default function EntryForm({
     setBad(problems);
     if (!Object.keys(problems).length) setError(null);
   };
+
+  // 房型的勾選不是一般的 DOM 欄位，表單的 onChange 當下還讀不到新值，
+  // 所以等 picked 真的更新、重畫完之後再驗一次（按過送出才會有紅框）。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(recheck, [picked]);
 
   /** 存檔成功後清空欄位。不用 form.reset()：那會把民宿也打回第一間。 */
   function clearForm() {
@@ -237,7 +256,9 @@ export default function EntryForm({
       setError("紅框的欄位還沒填好。");
       // 捲到 / 聚焦第一個沒填的欄位，欄位多的時候不用自己找
       const first = Object.keys(problems)[0];
-      formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
+      formRef.current
+        ?.querySelector<HTMLElement>(`[name="${first}"], [data-field="${first}"]`)
+        ?.focus();
       return;
     }
 
@@ -532,15 +553,38 @@ export default function EntryForm({
           {/* 房型全部列出來，勾了才填間數（大床房 ×1 + 小床房 ×2 = 一張訂單兩列）。
               天數是整張訂單共用的，所以不在這裡重複填。 */}
           <div>
-            <label className="label" style={stayLocked ? { color: "var(--text-muted)" } : undefined}>
+            <label
+              className="label"
+              style={
+                stayLocked
+                  ? { color: "var(--text-muted)" }
+                  : bad.rooms
+                    ? { color: "var(--critical)" }
+                    : undefined
+              }
+            >
               房型 / 間數（可複選）{stayLocked && "－不需填"}
             </label>
             {/* 一個房型一列會把表單拉得很長，改成會自動換行的標籤，
                 只有勾起來的才展開右邊的間數框 */}
             <div
               className="flex flex-wrap gap-1.5"
-              // 非住宿的收入來源算不出間數：整區反白不讓勾
-              style={stayLocked ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+              // 沒勾任何房型時要能被「捲到第一個沒填的欄位」找到（這區沒有 name 可比對）
+              data-field="rooms"
+              tabIndex={-1}
+              style={{
+                // 非住宿的收入來源算不出間數：整區反白不讓勾
+                ...(stayLocked ? { opacity: 0.5, cursor: "not-allowed" } : null),
+                // 一個都沒勾（或間數沒填）就整區畫紅框，跟其他必填欄位一致
+                ...(bad.rooms
+                  ? {
+                      border: "1px solid var(--critical)",
+                      borderRadius: 8,
+                      padding: "0.35rem",
+                      outline: "none",
+                    }
+                  : null),
+              }}
             >
               {roomOptions.map(({ key, name, label }) => {
                 const on = key in picked;
@@ -597,7 +641,13 @@ export default function EntryForm({
                           aria-label={`${label} 的間數`}
                           value={picked[key]}
                           onChange={(e) => setRoomCount(key, e.target.value)}
-                          style={{ width: 66, flex: "none", padding: "0.15rem 0.2rem 0.15rem 0.35rem" }}
+                          aria-invalid={roomCountBad(picked[key])}
+                          style={{
+                            width: 66,
+                            flex: "none",
+                            padding: "0.15rem 0.2rem 0.15rem 0.35rem",
+                            ...invalidStyle(roomCountBad(picked[key])),
+                          }}
                         />
                       </>
                     )}

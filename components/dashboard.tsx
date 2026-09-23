@@ -131,7 +131,7 @@ export function Donut({
           {emptyText}
         </p>
       ) : (
-        <div className="flex items-center gap-5 flex-wrap">
+        <div className="flex flex-col items-center md:flex-row md:items-center gap-5">
           <svg
             viewBox="0 0 42 42"
             style={{ width: 132, height: 132 }}
@@ -154,7 +154,7 @@ export function Donut({
               />
             ))}
           </svg>
-          <ul className="flex-1 min-w-[170px] flex flex-col gap-2 text-sm">
+          <ul className="w-full md:w-auto md:flex-1 md:min-w-[170px] flex flex-col gap-2 text-sm">
             {rows.map((r, i) => (
               <li key={r.name} className="flex items-center gap-2">
                 <span
