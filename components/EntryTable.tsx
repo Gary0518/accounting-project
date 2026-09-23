@@ -11,10 +11,12 @@ import { ntd, type Entry } from "@/lib/domain";
  * @param showActions 是否顯示修改 / 刪除。營業數據頁只要 operations 權限就看得到，
  *                    但改刪要 input 權限，所以那一頁一律關掉。
  * @param editOptions 修改視窗要用的下拉選項；showActions 開著時必填。
+ * @param creatorName 帳號 id → 顯示名字。entries 只存 id，沒有這張表就只能印 uuid。
  */
 export default function EntryTable({
   rows,
   propName,
+  creatorName,
   showActions = false,
   editOptions,
   onChanged,
@@ -22,6 +24,7 @@ export default function EntryTable({
 }: {
   rows: Entry[];
   propName: Map<number, string>;
+  creatorName?: Map<string, string>;
   showActions?: boolean;
   editOptions?: EntryFormOptions;
   onChanged?: () => void;
@@ -129,8 +132,9 @@ export default function EntryTable({
                 </>
               )}
             </td>
-            <td className="p-3 text-xs tabular whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
-              {cont ? "" : e.created_by ?? "—"}
+            <td className="p-3 text-xs whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+              {/* 只顯示名字：查不到名字（帳號被刪、或名字還沒設）就留「—」，不要把 uuid 丟出來 */}
+              {cont ? "" : (e.created_by && creatorName?.get(e.created_by)) || "—"}
             </td>
             {showActions && (
               <td className="p-3 text-right whitespace-nowrap">

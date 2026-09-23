@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import EntryForm from "@/components/EntryForm";
 import RecentEntries from "@/components/RecentEntries";
+import { type Creator } from "@/lib/domain";
 
 interface Option {
   name: string;
@@ -27,6 +28,7 @@ const LAST_PROPERTY_KEY = "accounting:last-property";
  */
 export default function EntriesWorkspace({
   properties,
+  creators,
   paymentMethods,
   channels,
   roomTypes,
@@ -34,6 +36,8 @@ export default function EntriesWorkspace({
   filterCategories,
 }: {
   properties: Property[];
+  /** 明細「建立人員」那欄要顯示的名字 */
+  creators: Creator[];
   paymentMethods: Option[];
   channels: Option[];
   roomTypes: Option[];
@@ -99,6 +103,7 @@ export default function EntriesWorkspace({
 
       <RecentEntries
         properties={properties}
+        creators={creators}
         filterCategories={filterCategories}
         view={view}
         onViewChange={setView}

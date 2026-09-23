@@ -29,6 +29,13 @@ export interface Entry {
   created_by?: string | null; // 建立人員（建這筆帳的帳號 ID）
 }
 
+/** 明細「建立人員」要顯示的名字（entries 只存帳號 id，名字要另外查）。 */
+export interface Creator {
+  id: string;
+  /** 管理頁設定的中文名字；沒設就退而用 email（總之不要把 uuid 給人看） */
+  name: string;
+}
+
 /** 「最近帳目」的一頁（loadRecentEntries 的回傳值）。 */
 export interface RecentEntriesPage {
   rows: Entry[];
@@ -129,8 +136,13 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 // 以下常數只剩「設定頁的說明文字」在用；真正決定金額與歸屬的是那支 SQL 函式，
 // 要改金額或改記在誰頭上，兩邊都要改。
 export const CLEANING_FEE_PER_ROOM = 300;
-export const CLEANING_HANDLER = "黃志剛";
-export const CLEANING_PAYMENT = "現金志剛";
+/** 記在誰頭上：壹樓文旅一組，其他民宿一組（見 migration_cleaning_by_property.sql）。 */
+export const CLEANING_BOOKING = {
+  /** 民宿名稱就是「壹樓文旅」那間 */
+  yilou: { handler: "陳怡安", payment: "匯款（永豐-怡安）" },
+  /** 其他所有民宿 */
+  other: { handler: "黃志剛", payment: "匯款（兆豐-志剛）" },
+} as const;
 
 /** 住宿列：有填房間數的住宿費收入（多房型的訂單會有多列）。 */
 const staysOf = (entries: Entry[]) =>

@@ -2,10 +2,14 @@
 
 import { useMemo, useState } from "react";
 import EntryTable from "@/components/EntryTable";
-import { type Entry } from "@/lib/domain";
+import { type Creator, type Entry } from "@/lib/domain";
 
 /** 一列帳目裡所有能搜的文字（表上看得到的欄位，加上收款方式、經手人這些表上沒列的）。 */
-function searchText(e: Entry, propName: Map<number, string>): string {
+function searchText(
+  e: Entry,
+  propName: Map<number, string>,
+  creatorName: Map<string, string>,
+): string {
   const total = e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0);
   const [y, m, d] = e.entry_date.split("-");
   return [
@@ -39,7 +43,8 @@ function searchText(e: Entry, propName: Map<number, string>): string {
     total,
     total.toLocaleString("en-US"),
     e.handler,
-    e.created_by,
+    // 搜的是表上顯示的名字，不是 uuid
+    e.created_by ? creatorName.get(e.created_by) : null,
   ]
     .filter((v) => v !== null && v !== undefined && v !== "")
     .join(" ")
@@ -56,17 +61,21 @@ function searchText(e: Entry, propName: Map<number, string>): string {
 export default function EntryDetail({
   rows,
   properties,
+  creators,
   propLabel,
   periodLabel,
 }: {
   rows: Entry[];
   properties: { id: number; name: string }[];
+  /** 建立人員那欄要顯示的名字（帳號 id → 中文名字） */
+  creators: Creator[];
   propLabel: string;
   periodLabel: string;
 }) {
   const [category, setCategory] = useState("all");
   const [keyword, setKeyword] = useState("");
   const propName = useMemo(() => new Map(properties.map((p) => [p.id, p.name])), [properties]);
+  const creatorName = useMemo(() => new Map(creators.map((c) => [c.id, c.name])), [creators]);
 
   // 選單只列這段期間真的出現過的科目，收入在前、支出在後（同一組再按筆數多的排前面）
   const options = useMemo(() => {
@@ -102,7 +111,7 @@ export default function EntryDetail({
   if (terms.length) {
     for (const e of byCategory) {
       const k = e.booking_id ?? e.id;
-      bookingText.set(k, (bookingText.get(k) ?? "") + " " + searchText(e, propName));
+      bookingText.set(k, (bookingText.get(k) ?? "") + " " + searchText(e, propName, creatorName));
     }
   }
   const detail = terms.length
@@ -164,6 +173,7 @@ export default function EntryDetail({
         <EntryTable
           rows={detail}
           propName={propName}
+          creatorName={creatorName}
           emptyText={
             terms.length
               ? `找不到符合「${keyword.trim()}」的帳目。`

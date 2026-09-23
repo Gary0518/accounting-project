@@ -5,7 +5,7 @@ import { loadRecentEntries } from "@/app/actions";
 import EntryTable from "@/components/EntryTable";
 import { type EntryFormOptions } from "@/components/EditEntryButton";
 import { createClient } from "@/lib/supabase/client";
-import { type Entry } from "@/lib/domain";
+import { type Creator, type Entry } from "@/lib/domain";
 
 interface Property {
   id: number;
@@ -29,6 +29,7 @@ const disabledStyle = (off: boolean) =>
  */
 export default function RecentEntries({
   properties,
+  creators,
   filterCategories,
   view,
   onViewChange,
@@ -36,6 +37,8 @@ export default function RecentEntries({
   editOptions,
 }: {
   properties: Property[];
+  /** 明細「建立人員」那欄要顯示的名字（帳號 id → 中文名字） */
+  creators: Creator[];
   /** 科目篩選的選項。比表單的 categories 多一個「清潔費」——它不給人工輸入，但帳上有，要能篩 */
   filterCategories: Categories;
   view: string;
@@ -117,6 +120,7 @@ export default function RecentEntries({
   }, [view, category, offsets, page, tick]);
 
   const propName = new Map(properties.map((p) => [p.id, p.name]));
+  const creatorName = new Map(creators.map((c) => [c.id, c.name]));
 
   return (
     <section className="card overflow-hidden">
@@ -189,6 +193,7 @@ export default function RecentEntries({
             <EntryTable
               rows={rows}
               propName={propName}
+              creatorName={creatorName}
               showActions
               editOptions={editOptions}
               onChanged={() => setTick((t) => t + 1)}

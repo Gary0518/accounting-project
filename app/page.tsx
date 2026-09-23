@@ -4,6 +4,7 @@ import NoAccess from "@/components/NoAccess";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import EntriesWorkspace from "@/components/EntriesWorkspace";
 import { createClient } from "@/lib/supabase/server";
+import { loadCreators } from "@/lib/queries";
 import { getAccess, allowedPropertyIds, canAny } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
@@ -34,12 +35,15 @@ export default async function EntriesPage() {
     { data: channels },
     { data: roomTypes },
     { data: cats },
+    creators,
   ] = await Promise.all([
     supabase.from("properties").select("id, name").eq("active", true).order("sort_order"),
     supabase.from("payment_methods").select("name").eq("active", true).order("sort_order"),
     supabase.from("channels").select("name").eq("active", true).order("sort_order"),
     supabase.from("room_types").select("name").eq("active", true).order("sort_order"),
     supabase.from("categories").select("name, direction").eq("active", true).order("sort_order"),
+    // 明細的「建立人員」那欄要用：entries 只存帳號 id，名字在 profiles
+    loadCreators(),
   ]);
 
   // 表單用：清潔費由系統每月底自動記一筆（房間數 × 300），不開放人工輸入
@@ -66,6 +70,7 @@ export default async function EntriesPage() {
       {/* 手機：表單在上、最近帳目在下（單欄堆疊）；桌機：左右並排 */}
       <EntriesWorkspace
         properties={props}
+        creators={creators}
         paymentMethods={paymentMethods ?? []}
         channels={channels ?? []}
         roomTypes={roomTypes ?? []}

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { type Entry, type Period } from "@/lib/domain";
+import { type Creator, type Entry, type Period } from "@/lib/domain";
 
 /**
  * 讀取儀表板 / 金流頁共用的資料：民宿清單、期間帳目、趨勢年帳目、住宿率分母。
@@ -73,4 +73,25 @@ export async function loadDashboardData(
         ? "全部民宿"
         : (properties.find((p) => String(p.id) === property)?.name ?? "全部民宿"),
   };
+}
+
+/**
+ * 讀取所有帳號的顯示名字，給明細把 entries.created_by（uuid）翻成人看得懂的名字。
+ * 走 profile_names view：profiles 本身的 RLS 只讓人看到自己那列，
+ * 一般使用者直接查會翻不出同事的名字。
+ */
+export async function loadCreators(): Promise<Creator[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profile_names")
+    .select("id, display_name, email");
+  if (error) {
+    // 名字翻不出來不該讓整頁掛掉，明細那欄退回顯示「—」就好
+    console.error("loadCreators failed:", error);
+    return [];
+  }
+  return (data ?? []).map((p: { id: string; display_name: string | null; email: string | null }) => ({
+    id: p.id,
+    name: p.display_name?.trim() || p.email || "",
+  }));
 }

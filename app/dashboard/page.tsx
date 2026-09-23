@@ -7,7 +7,7 @@ import SummaryKpis from "@/components/SummaryKpis";
 import { BarList, RoomTypeTable, MonthlyPnl } from "@/components/dashboard";
 import EntryDetail from "@/components/EntryDetail";
 import PrintButton from "@/components/PrintButton";
-import { loadDashboardData } from "@/lib/queries";
+import { loadDashboardData, loadCreators } from "@/lib/queries";
 import { getAccess, allowedPropertyIds, canAny } from "@/lib/access";
 import { summarize, monthlyNetSeries, resolvePeriod, currentMonth } from "@/lib/domain";
 
@@ -39,8 +39,12 @@ export default async function DashboardPage({
   const mode = period.key === "year" ? "year" : "month";
   const monthNum = mode === "year" ? new Date().getMonth() + 1 : Number(period.start.slice(5, 7));
 
-  const { properties, rooms, days, year, entries, yearEntries, propLabel } =
-    await loadDashboardData(period, property, allowedPropertyIds(access, "operations"));
+  // 兩個查詢彼此獨立，一起發出（建立人員的名字只是明細那一欄要用，不必等帳目查完）
+  const [{ properties, rooms, days, year, entries, yearEntries, propLabel }, creators] =
+    await Promise.all([
+      loadDashboardData(period, property, allowedPropertyIds(access, "operations")),
+      loadCreators(),
+    ]);
 
   const s = summarize(entries, rooms, days);
   // 明細用：查詢是日期由舊到新，明細要最新的在上面
@@ -84,6 +88,7 @@ export default async function DashboardPage({
         <EntryDetail
           rows={detail}
           properties={properties}
+          creators={creators}
           propLabel={propLabel}
           periodLabel={period.label}
         />
