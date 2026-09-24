@@ -6,6 +6,12 @@
 
 export type Direction = "income" | "expense";
 
+/** 最近帳目「科目篩選」的哨兵值：選了就依收支方向篩，而不是依單一科目 */
+export const DIRECTION_FILTER = {
+  income: "@income",
+  expense: "@expense",
+} as const;
+
 export interface Entry {
   id: string;
   property_id: number | null; // 屬於哪一間民宿

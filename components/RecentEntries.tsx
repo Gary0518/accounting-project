@@ -5,7 +5,7 @@ import { loadRecentEntries } from "@/app/actions";
 import EntryTable from "@/components/EntryTable";
 import { type EntryFormOptions } from "@/components/EditEntryButton";
 import { createClient } from "@/lib/supabase/client";
-import { type Creator, type Entry } from "@/lib/domain";
+import { DIRECTION_FILTER, type Creator, type Entry } from "@/lib/domain";
 
 interface Property {
   id: number;
@@ -119,6 +119,9 @@ export default function RecentEntries({
     };
   }, [view, category, offsets, page, tick]);
 
+  const categoryLabel = (c: string) =>
+    c === DIRECTION_FILTER.income ? "收入" : c === DIRECTION_FILTER.expense ? "支出" : c;
+
   const propName = new Map(properties.map((p) => [p.id, p.name]));
   const creatorName = new Map(creators.map((c) => [c.id, c.name]));
 
@@ -158,6 +161,7 @@ export default function RecentEntries({
           >
             <option value="">全部科目</option>
             <optgroup label="收入">
+              <option value={DIRECTION_FILTER.income}>全部收入</option>
               {filterCategories.income.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -165,6 +169,7 @@ export default function RecentEntries({
               ))}
             </optgroup>
             <optgroup label="支出">
+              <option value={DIRECTION_FILTER.expense}>全部支出</option>
               {filterCategories.expense.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -201,7 +206,7 @@ export default function RecentEntries({
                 page > 0
                   ? "這一頁沒有帳目了。"
                   : category
-                    ? `這間民宿沒有「${category}」的帳目。`
+                    ? `這間民宿沒有「${categoryLabel(category)}」的帳目。`
                     : "這間民宿還沒有帳目。"
               }
             />

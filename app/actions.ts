@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, allowedPropertyIds } from "@/lib/access";
-import { type Entry, type RecentEntriesPage } from "@/lib/domain";
+import { DIRECTION_FILTER, type Entry, type RecentEntriesPage } from "@/lib/domain";
 import {
   canonical,
   parseWorkbook,
@@ -228,7 +228,10 @@ export async function loadRecentEntries(
 
   // 科目篩選必須下到查詢裡：這裡是分頁撈的，只在前端濾當頁會變成「每頁筆數忽多忽少」。
   // 多房型訂單的續列與主列科目相同，所以整張訂單會一起留下或一起被濾掉。
-  if (category) q = q.eq("category", category);
+  // 「全部收入 / 全部支出」用哨兵值，改依 direction 篩（科目名稱是使用者自訂的，前面加 @ 避免撞名）
+  if (category === DIRECTION_FILTER.income) q = q.eq("direction", "income");
+  else if (category === DIRECTION_FILTER.expense) q = q.eq("direction", "expense");
+  else if (category) q = q.eq("category", category);
 
   const { data, error } = await q;
   if (error) {
