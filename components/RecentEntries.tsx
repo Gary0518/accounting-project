@@ -5,7 +5,12 @@ import { loadRecentEntries } from "@/app/actions";
 import EntryTable from "@/components/EntryTable";
 import { type EntryFormOptions } from "@/components/EditEntryButton";
 import { createClient } from "@/lib/supabase/client";
-import { DIRECTION_FILTER, type Creator, type Entry } from "@/lib/domain";
+import {
+  DIRECTION_FILTER,
+  type Creator,
+  type Entry,
+  type ExtraFilterField,
+} from "@/lib/domain";
 
 interface Property {
   id: number;
@@ -49,6 +54,8 @@ export default function RecentEntries({
 }) {
   // 空字串 = 全部科目。篩選是下到查詢裡的，不是只濾當頁。
   const [category, setCategory] = useState("");
+  // 其他篩選（通路 / 收款方式 / 房型 / 人員），值是「欄位:值」；空字串 = 不篩。跟科目篩選同時成立
+  const [extra, setExtra] = useState("");
   const [rows, setRows] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +74,7 @@ export default function RecentEntries({
   // 在 render 當下改，effect 才不會先用舊的頁碼多查一次。
   // 同事那邊的異動（tick）不重設頁碼，只重新載入目前這頁，免得看舊帳看到一半被彈回第一頁。
   // 換科目跟換民宿一樣：底下的列全變了，頁碼要回到第一頁
-  const resetKey = `${view}|${category}|${reloadToken}`;
+  const resetKey = `${view}|${category}|${extra}|${reloadToken}`;
   const [seenResetKey, setSeenResetKey] = useState(resetKey);
   if (resetKey !== seenResetKey) {
     setSeenResetKey(resetKey);
@@ -100,7 +107,7 @@ export default function RecentEntries({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    loadRecentEntries(view, offsets[page], category)
+    loadRecentEntries(view, offsets[page], category, extra)
       .then((data) => {
         if (cancelled) return;
         setRows(data.rows);
@@ -117,10 +124,32 @@ export default function RecentEntries({
     return () => {
       cancelled = true;
     };
-  }, [view, category, offsets, page, tick]);
+  }, [view, category, extra, offsets, page, tick]);
 
   const categoryLabel = (c: string) =>
     c === DIRECTION_FILTER.income ? "收入" : c === DIRECTION_FILTER.expense ? "支出" : c;
+
+  // 其他篩選的分組：每組一個 optgroup，像科目那樣分開
+  const names = (list: { name: string }[]) => list.map((o) => ({ value: o.name, name: o.name }));
+  const extraGroups: {
+    field: ExtraFilterField;
+    label: string;
+    options: { value: string; name: string }[];
+  }[] = [
+    { field: "channel", label: "來源通路", options: names(editOptions.channels) },
+    { field: "payment", label: "收款方式", options: names(editOptions.paymentMethods) },
+    { field: "room", label: "房型", options: names(editOptions.roomTypes) },
+    { field: "creator", label: "人員", options: creators.map((c) => ({ value: c.id, name: c.name })) },
+  ];
+  const extraLabel = (() => {
+    const sep = extra.indexOf(":");
+    const g = extraGroups.find((g) => g.field === extra.slice(0, sep));
+    return g?.options.find((o) => o.value === extra.slice(sep + 1))?.name ?? "";
+  })();
+  // 空狀態提示：兩個篩選都有選時用「、」接起來
+  const filterLabel = [category && categoryLabel(category), extra && extraLabel]
+    .filter(Boolean)
+    .join("、");
 
   const propName = new Map(properties.map((p) => [p.id, p.name]));
   const creatorName = new Map(creators.map((c) => [c.id, c.name]));
@@ -177,6 +206,33 @@ export default function RecentEntries({
               ))}
             </optgroup>
           </select>
+          <select
+            className="field"
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            aria-label="其他篩選"
+            disabled={!view}
+            style={{
+              width: "auto",
+              maxWidth: "100%",
+              padding: "0.35rem 0.5rem",
+              fontSize: "0.9rem",
+              opacity: view ? 1 : 0.5,
+            }}
+          >
+            <option value="">其他篩選</option>
+            {extraGroups
+              .filter((g) => g.options.length)
+              .map((g) => (
+                <optgroup key={g.field} label={g.label}>
+                  {g.options.map((o) => (
+                    <option key={o.value} value={`${g.field}:${o.value}`}>
+                      {o.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+          </select>
         </div>
       </div>
 
@@ -205,8 +261,8 @@ export default function RecentEntries({
               emptyText={
                 page > 0
                   ? "這一頁沒有帳目了。"
-                  : category
-                    ? `這間民宿沒有「${categoryLabel(category)}」的帳目。`
+                  : filterLabel
+                    ? `這間民宿沒有「${filterLabel}」的帳目。`
                     : "這間民宿還沒有帳目。"
               }
             />

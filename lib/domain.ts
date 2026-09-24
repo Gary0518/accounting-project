@@ -12,6 +12,14 @@ export const DIRECTION_FILTER = {
   expense: "@expense",
 } as const;
 
+/**
+ * 最近帳目「其他篩選」能篩的欄位。選項值是「欄位:值」，例如 "channel:Agoda"。
+ * payment 同時比對收款方式與訂金的收款方式；creator 的值是帳號 id，
+ * 比對的是明細上顯示的那個人（改過的帳看最後修改人員，沒改過看建立人員）。
+ */
+export const EXTRA_FILTER_FIELDS = ["channel", "payment", "room", "creator"] as const;
+export type ExtraFilterField = (typeof EXTRA_FILTER_FIELDS)[number];
+
 export interface Entry {
   id: string;
   property_id: number | null; // 屬於哪一間民宿
@@ -33,6 +41,7 @@ export interface Entry {
   handler: string | null;
   memo: string | null;
   created_by?: string | null; // 建立人員（建這筆帳的帳號 ID）
+  updated_by?: string | null; // 最後修改人員（按「修改」存檔的帳號 ID）；null = 沒被人改過
 }
 
 /** 明細「建立人員」要顯示的名字（entries 只存帳號 id，名字要另外查）。 */

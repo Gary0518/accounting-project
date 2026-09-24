@@ -11,7 +11,7 @@ import { ntd, type Entry } from "@/lib/domain";
  * @param showActions 是否顯示修改 / 刪除。營業數據頁只要 operations 權限就看得到，
  *                    但改刪要 input 權限，所以那一頁一律關掉。
  * @param editOptions 修改視窗要用的下拉選項；showActions 開著時必填。
- * @param creatorName 帳號 id → 顯示名字。entries 只存 id，沒有這張表就只能印 uuid。
+ * @param creatorName 帳號 id → 顯示名字（建立人員與最後修改人員共用）。entries 只存 id，沒有這張表就只能印 uuid。
  */
 export default function EntryTable({
   rows,
@@ -64,7 +64,7 @@ export default function EntryTable({
           <th className="p-3 font-medium text-center whitespace-nowrap">間數</th>
           <th className="p-3 font-medium">說明</th>
           <th className="p-3 font-medium text-right">金額</th>
-          <th className="p-3 font-medium whitespace-nowrap">建立人員</th>
+          <th className="p-3 font-medium whitespace-nowrap">人員</th>
           {showActions && <th className="p-3"></th>}
         </tr>
       </thead>
@@ -127,14 +127,39 @@ export default function EntryTable({
                   {e.direction === "income" && (e.deposit ?? 0) > 0 && (
                     <div className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>
                       含訂金 {ntd(e.deposit ?? 0)}
+                      {e.deposit_payment_method ? `（${e.deposit_payment_method}）` : null}
+                    </div>
+                  )}
+                  {e.payment_method && (
+                    <div className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>
+                      {e.payment_method}
                     </div>
                   )}
                 </>
               )}
             </td>
             <td className="p-3 text-xs whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
-              {/* 只顯示名字：查不到名字（帳號被刪、或名字還沒設）就留「—」，不要把 uuid 丟出來 */}
-              {cont ? "" : (e.created_by && creatorName?.get(e.created_by)) || "—"}
+              {/* 只顯示名字：查不到名字（帳號被刪、或名字還沒設）就留「—」，不要把 uuid 丟出來。
+                  改過的帳顯示最後修改的人，底下標「已修改」，滑鼠停上去看原本是誰建的。 */}
+              {cont ? "" : (
+                <span
+                  title={
+                    e.updated_by
+                      ? `建立：${(e.created_by && creatorName?.get(e.created_by)) || "—"}`
+                      : undefined
+                  }
+                >
+                  {(() => {
+                    const who = e.updated_by ?? e.created_by;
+                    return (who && creatorName?.get(who)) || "—";
+                  })()}
+                  {e.updated_by && (
+                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      已修改
+                    </div>
+                  )}
+                </span>
+              )}
             </td>
             {showActions && (
               <td className="p-3 text-right whitespace-nowrap">

@@ -70,6 +70,7 @@ create table if not exists public.entries (
   handler      text,                                                -- 經手人
   memo         text,                                                -- 備註（例：1600收退300）
   created_by   uuid    references auth.users(id) default auth.uid(),
+  updated_by   uuid    references auth.users(id),                   -- 最後修改人員（null = 沒被人改過）
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );

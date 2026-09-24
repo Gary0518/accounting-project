@@ -43,8 +43,10 @@ function searchText(
     total,
     total.toLocaleString("en-US"),
     e.handler,
-    // 搜的是表上顯示的名字，不是 uuid
+    // 搜的是表上顯示的名字，不是 uuid；改過的帳建立人與修改人都搜得到
     e.created_by ? creatorName.get(e.created_by) : null,
+    e.updated_by ? creatorName.get(e.updated_by) : null,
+    e.updated_by ? "已修改" : null,
   ]
     .filter((v) => v !== null && v !== undefined && v !== "")
     .join(" ")

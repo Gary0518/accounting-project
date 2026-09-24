@@ -5,7 +5,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, allowedPropertyIds } from "@/lib/access";
-import { DIRECTION_FILTER, type Entry, type RecentEntriesPage } from "@/lib/domain";
+import {
+  DIRECTION_FILTER,
+  EXTRA_FILTER_FIELDS,
+  type Entry,
+  type ExtraFilterField,
+  type RecentEntriesPage,
+} from "@/lib/domain";
 import {
   canonical,
   parseWorkbook,
@@ -148,7 +154,11 @@ export async function updateEntry(formData: FormData) {
   );
   // 經手人沿用原本的：修改不代表這筆帳換人負責
   const handler = old[0].handler ?? (await currentHandler());
-  const rows = buildEntryRows(formData, handler, old[0].booking_id ?? key);
+  // 記下最後修改人員：明細的人員欄改顯示這個人，並標「已修改」
+  const rows = buildEntryRows(formData, handler, old[0].booking_id ?? key).map((r) => ({
+    ...r,
+    updated_by: access.userId,
+  }));
 
   const ops: PromiseLike<{ error: unknown }>[] = [];
   for (let i = 0; i < Math.max(old.length, rows.length); i++) {
@@ -190,11 +200,14 @@ const RECENT_LOOKAHEAD = 10;
  *
  * @param view 民宿 id 字串，或 "all" 代表全部（僅限自己看得到的那些）
  * @param offset 這一頁從第幾列開始（第一頁 0）
+ * @param category 科目篩選：科目名稱，或 DIRECTION_FILTER 的哨兵值
+ * @param extra 其他篩選，格式「欄位:值」（見 EXTRA_FILTER_FIELDS），空字串 = 不篩
  */
 export async function loadRecentEntries(
   view: string,
   offset = 0,
   category = "",
+  extra = "",
 ): Promise<RecentEntriesPage> {
   const empty: RecentEntriesPage = { rows: [], nextOffset: 0, hasMore: false };
   const access = await getAccess();
@@ -233,6 +246,24 @@ export async function loadRecentEntries(
   else if (category === DIRECTION_FILTER.expense) q = q.eq("direction", "expense");
   else if (category) q = q.eq("category", category);
 
+  // 其他篩選：欄位名稱來自前端，只認白名單裡的
+  const sep = extra.indexOf(":");
+  const field = sep > 0 ? (extra.slice(0, sep) as ExtraFilterField) : null;
+  const value = sep > 0 ? extra.slice(sep + 1) : "";
+  if (field && value && EXTRA_FILTER_FIELDS.includes(field)) {
+    if (field === "payment") {
+      // 訂金的收款方式也算：訂金用匯款付的訂單，篩「匯款」時要找得到
+      const v = `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      q = q.or(`payment_method.eq.${v},deposit_payment_method.eq.${v}`);
+    } else if (field === "channel") q = q.eq("channel", value);
+    else if (field === "room") q = q.eq("room_type", value);
+    else if (field === "creator" && /^[0-9a-f-]{36}$/i.test(value)) {
+      // 跟明細顯示的人一致：改過的帳算最後修改人員，沒改過的算建立人員
+      // （value 會拼進查詢字串，上面先確認是 uuid）
+      q = q.or(`updated_by.eq.${value},and(updated_by.is.null,created_by.eq.${value})`);
+    }
+  }
+
   const { data, error } = await q;
   if (error) {
     console.error("loadRecentEntries failed:", error);
@@ -248,11 +279,27 @@ export async function loadRecentEntries(
     rows.push(e);
   }
 
-  return {
-    rows,
-    nextOffset: from + rows.length,
-    hasMore: fetched.length > rows.length,
-  };
+  const nextOffset = from + rows.length;
+  const hasMore = fetched.length > rows.length;
+
+  // 房型是一列一個，篩房型只會撈到訂單裡的某幾列。把同一張訂單的其他列補回來：
+  // 不補的話明細會缺房型、金額可能不見（金額掛在第一列），按「修改」存檔還會把沒帶進來的房型刪掉。
+  // 補回來的列不在篩選結果的序列裡，所以不算進 offset。
+  const bookingIds = [...new Set(rows.map((e) => e.booking_id).filter((b): b is string => !!b))];
+  if (field === "room" && bookingIds.length) {
+    const seen = new Set(rows.map((e) => e.id));
+    const { data: siblings, error: sErr } = await supabase
+      .from("entries")
+      .select("*")
+      .in("booking_id", bookingIds);
+    if (sErr) {
+      console.error("loadRecentEntries (siblings) failed:", sErr);
+      throw new Error("讀取最近帳目失敗");
+    }
+    for (const e of (siblings ?? []) as Entry[]) if (!seen.has(e.id)) rows.push(e);
+  }
+
+  return { rows, nextOffset, hasMore };
 }
 
 /** 管理員：更新某使用者的權限（是否管理員 + 每間民宿的三個能力）。 */
