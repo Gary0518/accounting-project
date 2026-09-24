@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess, allowedPropertyIds } from "@/lib/access";
+import { loadCreators } from "@/lib/queries";
 import {
   DIRECTION_FILTER,
   EXTRA_FILTER_FIELDS,
+  filterByKeyword,
   type Entry,
   type ExtraFilterField,
   type RecentEntriesPage,
@@ -202,12 +204,14 @@ const RECENT_LOOKAHEAD = 10;
  * @param offset 這一頁從第幾列開始（第一頁 0）
  * @param category 科目篩選：科目名稱，或 DIRECTION_FILTER 的哨兵值
  * @param extra 其他篩選，格式「欄位:值」（見 EXTRA_FILTER_FIELDS），空字串 = 不篩
+ * @param keyword 文字搜尋（同帳目明細：空格可疊加），空字串 = 不搜
  */
 export async function loadRecentEntries(
   view: string,
   offset = 0,
   category = "",
   extra = "",
+  keyword = "",
 ): Promise<RecentEntriesPage> {
   const empty: RecentEntriesPage = { rows: [], nextOffset: 0, hasMore: false };
   const access = await getAccess();
@@ -218,14 +222,14 @@ export async function loadRecentEntries(
   const from = Math.max(0, Math.trunc(offset));
 
   const supabase = await createClient();
+  // 還沒下 range：有搜尋時要整段撈回來搜，沒搜尋才只撈這一頁
   let q = supabase
     .from("entries")
     .select("*")
     .order("entry_date", { ascending: false })
     // 同一張訂單的列要排在一起、且每次查詢順序固定，翻頁才不會有列重複或漏掉
     .order("booking_id", { ascending: false, nullsFirst: false })
-    .order("id", { ascending: false })
-    .range(from, from + RECENT_PAGE_SIZE + RECENT_LOOKAHEAD - 1);
+    .order("id", { ascending: false });
 
   if (view === "all") {
     // 管理員 allowed=null → 不加條件；一般人限縮在自己可輸入的民宿
@@ -264,13 +268,41 @@ export async function loadRecentEntries(
     }
   }
 
-  const { data, error } = await q;
-  if (error) {
-    console.error("loadRecentEntries failed:", error);
-    throw new Error("讀取最近帳目失敗");
+  let fetched: Entry[];
+  if (keyword.trim()) {
+    // 文字搜尋比對的是表上顯示的文字（民宿名、人員名字、千分位金額…），SQL 做不到，
+    // 只能把科目 / 其他篩選過後的帳整段撈回來在這裡搜，再對搜尋結果分頁。
+    // offset 因此是「搜尋結果裡的第幾列」，換關鍵字時前端會回到第一頁。
+    const all: Entry[] = [];
+    // Supabase 一次最多回 1000 列，要分批撈到底
+    for (let start = 0; ; start += 1000) {
+      const { data, error } = await q.range(start, start + 999);
+      if (error) {
+        console.error("loadRecentEntries (search) failed:", error);
+        throw new Error("讀取最近帳目失敗");
+      }
+      all.push(...((data ?? []) as Entry[]));
+      if (!data || data.length < 1000) break;
+    }
+    const [{ data: props }, creators] = await Promise.all([
+      supabase.from("properties").select("id, name"),
+      loadCreators(),
+    ]);
+    const propName = new Map((props ?? []).map((p) => [p.id as number, p.name as string]));
+    const creatorName = new Map(creators.map((c) => [c.id, c.name]));
+    fetched = filterByKeyword(all, keyword, propName, creatorName).slice(
+      from,
+      from + RECENT_PAGE_SIZE + RECENT_LOOKAHEAD,
+    );
+  } else {
+    const { data, error } = await q.range(from, from + RECENT_PAGE_SIZE + RECENT_LOOKAHEAD - 1);
+    if (error) {
+      console.error("loadRecentEntries failed:", error);
+      throw new Error("讀取最近帳目失敗");
+    }
+    fetched = (data ?? []) as Entry[];
   }
 
-  const fetched = (data ?? []) as Entry[];
   const rows = fetched.slice(0, RECENT_PAGE_SIZE);
   // 補完最後一張訂單：多讀的那幾列裡，凡是屬於本頁已出現的訂單就一起收進來
   const keys = new Set(rows.map((e) => e.booking_id ?? e.id));

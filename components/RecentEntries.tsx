@@ -56,6 +56,13 @@ export default function RecentEntries({
   const [category, setCategory] = useState("");
   // 其他篩選（通路 / 收款方式 / 房型 / 人員），值是「欄位:值」；空字串 = 不篩。跟科目篩選同時成立
   const [extra, setExtra] = useState("");
+  // 文字搜尋：keyword 跟著輸入框走，query 是停手 300ms 後才送出去查的那個，免得每打一個字查一次
+  const [keyword, setKeyword] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(keyword.trim()), 300);
+    return () => clearTimeout(t);
+  }, [keyword]);
   const [rows, setRows] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +81,7 @@ export default function RecentEntries({
   // 在 render 當下改，effect 才不會先用舊的頁碼多查一次。
   // 同事那邊的異動（tick）不重設頁碼，只重新載入目前這頁，免得看舊帳看到一半被彈回第一頁。
   // 換科目跟換民宿一樣：底下的列全變了，頁碼要回到第一頁
-  const resetKey = `${view}|${category}|${extra}|${reloadToken}`;
+  const resetKey = `${view}|${category}|${extra}|${query}|${reloadToken}`;
   const [seenResetKey, setSeenResetKey] = useState(resetKey);
   if (resetKey !== seenResetKey) {
     setSeenResetKey(resetKey);
@@ -107,7 +114,7 @@ export default function RecentEntries({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    loadRecentEntries(view, offsets[page], category, extra)
+    loadRecentEntries(view, offsets[page], category, extra, query)
       .then((data) => {
         if (cancelled) return;
         setRows(data.rows);
@@ -124,7 +131,7 @@ export default function RecentEntries({
     return () => {
       cancelled = true;
     };
-  }, [view, category, extra, offsets, page, tick]);
+  }, [view, category, extra, query, offsets, page, tick]);
 
   const categoryLabel = (c: string) =>
     c === DIRECTION_FILTER.income ? "收入" : c === DIRECTION_FILTER.expense ? "支出" : c;
@@ -146,8 +153,8 @@ export default function RecentEntries({
     const g = extraGroups.find((g) => g.field === extra.slice(0, sep));
     return g?.options.find((o) => o.value === extra.slice(sep + 1))?.name ?? "";
   })();
-  // 空狀態提示：兩個篩選都有選時用「、」接起來
-  const filterLabel = [category && categoryLabel(category), extra && extraLabel]
+  // 空狀態提示：篩選與搜尋字有好幾個時用「、」接起來
+  const filterLabel = [category && categoryLabel(category), extra && extraLabel, query]
     .filter(Boolean)
     .join("、");
 
@@ -158,81 +165,81 @@ export default function RecentEntries({
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between gap-3 p-4 pb-2 flex-wrap">
         <h2 className="font-semibold">最近帳目</h2>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            className="field"
-            value={view}
-            onChange={(e) => onViewChange(e.target.value)}
-            aria-label="要看哪間民宿的最近帳目"
-            style={{ width: "auto", maxWidth: "100%", padding: "0.35rem 0.5rem", fontSize: "0.9rem" }}
-          >
-            <option value="">選擇民宿…</option>
-            {properties.map((p) => (
-              <option key={p.id} value={String(p.id)}>
-                {p.name}
-              </option>
-            ))}
-            <option value="all">全部民宿</option>
-          </select>
-          <select
-            className="field"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            aria-label="篩選科目"
+        {/* 手機：搜尋框一排、三個下拉一排；電腦：全部排成一列 */}
+        <div className="w-full sm:w-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+          <input
+            type="search"
+            className="field field-filter"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="搜尋任何欄位（空格可疊加）…"
+            aria-label="搜尋最近帳目"
             disabled={!view}
-            style={{
-              width: "auto",
-              maxWidth: "100%",
-              padding: "0.35rem 0.5rem",
-              fontSize: "0.9rem",
-              opacity: view ? 1 : 0.5,
-            }}
-          >
-            <option value="">全部科目</option>
-            <optgroup label="收入">
-              <option value={DIRECTION_FILTER.income}>全部收入</option>
-              {filterCategories.income.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+            style={{ opacity: view ? 1 : 0.5 }}
+          />
+          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:gap-2">
+            <select
+              className="field field-filter"
+              value={view}
+              onChange={(e) => onViewChange(e.target.value)}
+              aria-label="要看哪間民宿的最近帳目"
+            >
+              <option value="">選擇民宿…</option>
+              {properties.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.name}
                 </option>
               ))}
-            </optgroup>
-            <optgroup label="支出">
-              <option value={DIRECTION_FILTER.expense}>全部支出</option>
-              {filterCategories.expense.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <select
-            className="field"
-            value={extra}
-            onChange={(e) => setExtra(e.target.value)}
-            aria-label="其他篩選"
-            disabled={!view}
-            style={{
-              width: "auto",
-              maxWidth: "100%",
-              padding: "0.35rem 0.5rem",
-              fontSize: "0.9rem",
-              opacity: view ? 1 : 0.5,
-            }}
-          >
-            <option value="">其他篩選</option>
-            {extraGroups
-              .filter((g) => g.options.length)
-              .map((g) => (
-                <optgroup key={g.field} label={g.label}>
-                  {g.options.map((o) => (
-                    <option key={o.value} value={`${g.field}:${o.value}`}>
-                      {o.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-          </select>
+              <option value="all">全部民宿</option>
+            </select>
+            <select
+              className="field field-filter"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              aria-label="篩選科目"
+              disabled={!view}
+              style={{ opacity: view ? 1 : 0.5 }}
+            >
+              <option value="">全部科目</option>
+              <optgroup label="收入">
+                <option value={DIRECTION_FILTER.income}>全部收入</option>
+                {filterCategories.income.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="支出">
+                <option value={DIRECTION_FILTER.expense}>全部支出</option>
+                {filterCategories.expense.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <select
+              className="field field-filter"
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              aria-label="其他篩選"
+              disabled={!view}
+              style={{ opacity: view ? 1 : 0.5 }}
+            >
+              <option value="">其他篩選</option>
+              {extraGroups
+                .filter((g) => g.options.length)
+                .map((g) => (
+                  <optgroup key={g.field} label={g.label}>
+                    {g.options.map((o) => (
+                      <option key={o.value} value={`${g.field}:${o.value}`}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+          </div>
         </div>
       </div>
 

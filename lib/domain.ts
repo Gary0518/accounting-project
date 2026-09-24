@@ -498,3 +498,77 @@ export function resolvePeriod(key: string, month?: string, year?: string): Perio
       return monthPeriod(currentMonth(), "this-month");
   }
 }
+
+/** 一列帳目裡所有能搜的文字（表上看得到的欄位，加上收款方式、經手人這些表上沒列的）。 */
+export function searchText(
+  e: Entry,
+  propName: Map<number, string>,
+  creatorName: Map<string, string>,
+): string {
+  const total = e.amount + (e.direction === "income" ? e.deposit ?? 0 : 0);
+  const [y, m, d] = e.entry_date.split("-");
+  return [
+    // 日期收連字號與斜線兩種寫法，打「09-23」「9/23」「2026/09/23」都找得到
+    e.entry_date,
+    `${y}/${m}/${d}`,
+    `${Number(m)}/${Number(d)}`,
+    e.property_id ? propName.get(e.property_id) : null,
+    e.direction === "income" ? "收入" : "支出",
+    e.category,
+    // 沒填房型但有間數時，表上顯示「未指定」，讓這個字也搜得到
+    e.room_type ?? (e.rooms ? "未指定" : null),
+    e.rooms,
+    e.rooms ? `${e.rooms}間` : null,
+    e.nights,
+    e.nights ? `${e.nights}天` : null,
+    e.room_nights,
+    e.guest_note,
+    e.channel,
+    e.memo,
+    // 表上這兩欄有前綴字，搜「備註」「訂金」要能把有寫的那些帳撈出來
+    e.memo ? "備註" : null,
+    e.payment_method,
+    e.deposit_payment_method,
+    // 金額用原始數字與千分位兩種寫法，打「3000」或「3,000」都找得到
+    e.amount,
+    e.amount.toLocaleString("en-US"),
+    e.deposit || null,
+    e.deposit ? e.deposit.toLocaleString("en-US") : null,
+    e.deposit ? "訂金" : null,
+    total,
+    total.toLocaleString("en-US"),
+    e.handler,
+    // 搜的是表上顯示的名字，不是 uuid；改過的帳建立人與修改人都搜得到
+    e.created_by ? creatorName.get(e.created_by) : null,
+    e.updated_by ? creatorName.get(e.updated_by) : null,
+    e.updated_by ? "已修改" : null,
+  ]
+    .filter((v) => v !== null && v !== undefined && v !== "")
+    .join(" ")
+    .toLowerCase();
+}
+
+/**
+ * 關鍵字搜尋帳目：用空白隔開、每個都要對到（「agoda 大床」= 同時有 agoda 和大床）。
+ * 以整張訂單為單位比對：多房型訂單只要其中一列對到就整張留下，
+ * 不然只剩一列續列的話，明細表會把它當成第一列、金額顯示成 0。
+ * 關鍵字是空的就原樣回傳。
+ */
+export function filterByKeyword(
+  rows: Entry[],
+  keyword: string,
+  propName: Map<number, string>,
+  creatorName: Map<string, string>,
+): Entry[] {
+  const terms = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return rows;
+  const bookingText = new Map<string, string>();
+  for (const e of rows) {
+    const k = e.booking_id ?? e.id;
+    bookingText.set(k, (bookingText.get(k) ?? "") + " " + searchText(e, propName, creatorName));
+  }
+  return rows.filter((e) => {
+    const text = bookingText.get(e.booking_id ?? e.id) ?? "";
+    return terms.every((t) => text.includes(t));
+  });
+}

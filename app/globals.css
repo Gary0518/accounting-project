@@ -111,6 +111,31 @@ body {
     min-width: 0;
   }
 }
+/* 最近帳目的搜尋框與三個篩選下拉。
+   寫成 class 而不是 inline style：手機版要換寬度與字級，inline 蓋不掉。 */
+.field-filter {
+  width: auto;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+.field-filter[type="search"] {
+  width: 14rem;
+}
+/* 手機版：搜尋框自己一整排；三個下拉擠同一排平分寬度，字縮小、選項名稱被截掉沒關係 */
+@media (max-width: 640px) {
+  .field-filter {
+    width: 100%;
+    min-width: 0;
+    padding: 0.3rem 0.3rem;
+    font-size: 0.75rem;
+  }
+  /* 搜尋框維持 16px：iOS 對小於 16px 的輸入框一點就會自動放大整頁 */
+  .field-filter[type="search"] {
+    width: 100%;
+    font-size: 1rem;
+  }
+}
 .label {
   font-size: 0.8rem;
   color: var(--text-secondary);
