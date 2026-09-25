@@ -7,7 +7,7 @@ import ImportOldData from "@/components/ImportOldData";
 import { updateUserAccess } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 import { getAccess } from "@/lib/access";
-import { CLEANING_BOOKING, CLEANING_FEE_PER_ROOM } from "@/lib/domain";
+import { CLEANING_FEE_PER_ROOM, CLEANING_PAYMENT } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -185,7 +185,7 @@ async function OptionsSection() {
         <OptionManager
           table="categories"
           title="支出科目"
-          hint={`切到「支出」時的科目下拉。清潔費由系統每月底自動記一筆（房間數 × ${CLEANING_FEE_PER_ROOM}）：壹樓文旅記在 ${CLEANING_BOOKING.yilou.handler} / ${CLEANING_BOOKING.yilou.payment}，其他民宿記在 ${CLEANING_BOOKING.other.handler} / ${CLEANING_BOOKING.other.payment}，不在此管理。`}
+          hint={`切到「支出」時的科目下拉。清潔費由系統每月底自動記一筆（房間數 × ${CLEANING_FEE_PER_ROOM}），收款方式一律「${CLEANING_PAYMENT}」，不在此管理。`}
           items={catItems("expense")}
           direction="expense"
           placeholder="例：修繕費"

@@ -151,13 +151,8 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 // 以下常數只剩「設定頁的說明文字」在用；真正決定金額與歸屬的是那支 SQL 函式，
 // 要改金額或改記在誰頭上，兩邊都要改。
 export const CLEANING_FEE_PER_ROOM = 300;
-/** 記在誰頭上：壹樓文旅一組，其他民宿一組（見 migration_cleaning_by_property.sql）。 */
-export const CLEANING_BOOKING = {
-  /** 民宿名稱就是「壹樓文旅」那間 */
-  yilou: { handler: "陳怡安", payment: "匯款（永豐-怡安）" },
-  /** 其他所有民宿 */
-  other: { handler: "黃志剛", payment: "匯款（兆豐-志剛）" },
-} as const;
+/** 收款方式：所有民宿一律這個，經手人留空（見 migration_cleaning_monthly_cash.sql）。 */
+export const CLEANING_PAYMENT = "月結清潔費-現金";
 
 /** 住宿列：有填房間數的住宿費收入（多房型的訂單會有多列）。 */
 const staysOf = (entries: Entry[]) =>
