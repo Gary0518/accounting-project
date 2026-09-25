@@ -27,27 +27,35 @@ const isLodging = (category: string) => category.includes("住宿");
 
 /**
  * 選了這些通路，收款方式自動帶入對應的帳戶（之後仍可手動改；訂金的收款方式不帶）。
- * 沒列的通路不自動帶。比對時忽略大小寫與空白：設定頁的名稱寫法不一定一致，
- * 「expedia」「外匯入帳- Expedia」都要對得到；對應的收款方式在設定頁不存在就不帶。
+ * 左邊是通路關鍵字，右邊是收款方式關鍵字；名稱「包含」關鍵字就算對到，
+ * 因為設定頁的名稱寫法不一定一致：「立榮旅行社」「應收-旅行社」「外匯入帳- Expedia」都要對得到。
+ * 比對時忽略大小寫、空白與標點；對不到的收款方式就不帶。
  */
-const CHANNEL_PAYMENT: Record<string, string> = {
-  trip: "外匯入帳-TRIP",
-  expedia: "外匯入帳-Expedia",
-  agoda: "外匯入帳-Agoda",
-  立榮: "應收旅行社",
-  華信: "應收旅行社",
-  樂咖: "應收旅行社",
-  大玩咖: "應收旅行社",
-};
-const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+const CHANNEL_PAYMENT: [string, string[]][] = [
+  ["trip", ["外匯", "trip"]],
+  ["expedia", ["外匯", "expedia"]],
+  ["agoda", ["外匯", "agoda"]],
+  ["立榮", ["應收", "旅行社"]],
+  ["華信", ["應收", "旅行社"]],
+  ["樂咖", ["應收", "旅行社"]],
+  ["大玩咖", ["應收", "旅行社"]],
+];
 
 /**
  * 選了這些收入來源，通路自動帶入對應的通路（之後仍可手動改）。
- * 比對方式同 CHANNEL_PAYMENT；對應的通路在設定頁不存在就不帶。
+ * 比對方式同 CHANNEL_PAYMENT：「租車費用」「租車費」都算租車。
  */
-const CATEGORY_CHANNEL: Record<string, string> = {
-  租車費用: "金豐",
-};
+const CATEGORY_CHANNEL: [string, string[]][] = [["租車", ["金豐"]]];
+
+const norm = (s: string) =>
+  s.replace(/[\s\-－–—_、,，.。:：·・()（）\[\]【】「」]/g, "").toLowerCase();
+
+/** 依 rules 找出 from 對應的關鍵字，再從 options 挑第一個名稱包含全部關鍵字的選項。 */
+function pickMapped(from: string, rules: [string, string[]][], options: Option[]) {
+  const rule = rules.find(([key]) => norm(from).includes(norm(key)));
+  if (!rule) return undefined;
+  return options.find((o) => rule[1].every((k) => norm(o.name).includes(norm(k))))?.name;
+}
 
 /** 反白（鎖住）的欄位長相：灰底灰字 + 禁止游標。 */
 const lockedStyle = {
@@ -123,22 +131,18 @@ export default function EntryForm({
 
   // 選通路 → 收款方式自動帶入對應帳戶（收款方式是非受控欄位，直接改 DOM 的值）
   const fillPaymentFromChannel = (channel: string) => {
-    const target = CHANNEL_PAYMENT[norm(channel)];
-    if (!target) return;
-    const match = paymentMethods.find((p) => norm(p.name) === norm(target));
+    const match = pickMapped(channel, CHANNEL_PAYMENT, paymentMethods);
     const select = formRef.current?.querySelector<HTMLSelectElement>('[name="payment_method"]');
-    if (match && select) select.value = match.name;
+    if (match && select) select.value = match;
   };
 
   // 選收入來源 → 通路自動帶入對應通路（通路也是非受控欄位），再連動帶收款方式
   const fillChannelFromCategory = (cat: string) => {
-    const target = CATEGORY_CHANNEL[norm(cat)];
-    if (!target) return;
-    const match = channels.find((c) => norm(c.name) === norm(target));
+    const match = pickMapped(cat, CATEGORY_CHANNEL, channels);
     const select = formRef.current?.querySelector<HTMLSelectElement>('[name="channel"]');
     if (!match || !select) return;
-    select.value = match.name;
-    fillPaymentFromChannel(match.name);
+    select.value = match;
+    fillPaymentFromChannel(match);
   };
 
   // 「未指定」也列一格：以前房型下拉有這個選項，有人只記間數不記房型，
