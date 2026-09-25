@@ -41,6 +41,14 @@ const CHANNEL_PAYMENT: Record<string, string> = {
 };
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
+/**
+ * 選了這些收入來源，通路自動帶入對應的通路（之後仍可手動改）。
+ * 比對方式同 CHANNEL_PAYMENT；對應的通路在設定頁不存在就不帶。
+ */
+const CATEGORY_CHANNEL: Record<string, string> = {
+  租車費用: "金豐",
+};
+
 /** 反白（鎖住）的欄位長相：灰底灰字 + 禁止游標。 */
 const lockedStyle = {
   background: "var(--bar-track)",
@@ -122,6 +130,17 @@ export default function EntryForm({
     if (match && select) select.value = match.name;
   };
 
+  // 選收入來源 → 通路自動帶入對應通路（通路也是非受控欄位），再連動帶收款方式
+  const fillChannelFromCategory = (cat: string) => {
+    const target = CATEGORY_CHANNEL[norm(cat)];
+    if (!target) return;
+    const match = channels.find((c) => norm(c.name) === norm(target));
+    const select = formRef.current?.querySelector<HTMLSelectElement>('[name="channel"]');
+    if (!match || !select) return;
+    select.value = match.name;
+    fillPaymentFromChannel(match.name);
+  };
+
   // 「未指定」也列一格：以前房型下拉有這個選項，有人只記間數不記房型，
   // 拿掉的話那種訂單就算不出清潔費了。
   const roomOptions = [
@@ -168,6 +187,7 @@ export default function EntryForm({
       setGuestNote("");
       setPicked({});
     }
+    if (direction === "income") fillChannelFromCategory(v);
   };
 
   /** 檢查必填欄位，回傳沒填好的欄位名。 */
