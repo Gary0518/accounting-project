@@ -31,6 +31,12 @@
   --cat-6: #e34948;
   --cat-7: #e87ba4;
   --cat-8: #eb6834;
+
+  /* 帳目表單底色，依民宿分（EntryForm 的 PROPERTY_TINT）；只求分得出來，所以都很淡 */
+  --tint-haoshi: #e2f5f5; /* 青 */
+  --tint-harvard: #fdebe2; /* 橘 */
+  --tint-yilou: #ececeb; /* 灰 */
+  --tint-wanglao: #fdf3d8; /* 黃 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -59,6 +65,11 @@
     --cat-6: #e66767;
     --cat-7: #d55181;
     --cat-8: #d95926;
+
+    --tint-haoshi: #13292a;
+    --tint-harvard: #2e1c15;
+    --tint-yilou: #262625;
+    --tint-wanglao: #2c2512;
   }
 }
 

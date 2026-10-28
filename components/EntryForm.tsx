@@ -50,6 +50,23 @@ const CATEGORY_CHANNEL: [string, string[]][] = [["租車", ["金豐"]]];
 const norm = (s: string) =>
   s.replace(/[\s\-－–—_、,，.。:：·・()（）\[\]【】「」]/g, "").toLowerCase();
 
+/**
+ * 表單底色跟著民宿換，一眼分得出現在記的是哪一間（色碼在 globals.css 的 --tint-*）。
+ * 用關鍵字比對，設定頁的民宿全名怎麼寫都對得到；對不到的民宿維持原本的底色。
+ */
+const PROPERTY_TINT: [string, string][] = [
+  ["好室", "haoshi"],
+  ["哈佛", "harvard"],
+  ["壹樓", "yilou"],
+  ["一樓", "yilou"],
+  ["王老", "wanglao"],
+];
+
+function propertyTint(name: string | undefined) {
+  const hit = name && PROPERTY_TINT.find(([key]) => name.includes(key));
+  return hit ? `var(--tint-${hit[1]})` : undefined;
+}
+
 /** 依 rules 找出 from 對應的關鍵字，再從 options 挑第一個名稱包含全部關鍵字的選項。 */
 function pickMapped(from: string, rules: [string, string[]][], options: Option[]) {
   const rule = rules.find(([key]) => norm(from).includes(norm(key)));
@@ -128,6 +145,7 @@ export default function EntryForm({
   const currentProperty = editing ? editProperty : (propertyId ?? "");
   const changeProperty = (v: string) =>
     editing ? setEditProperty(v) : onPropertyChange?.(v);
+  const tint = propertyTint(properties.find((p) => String(p.id) === currentProperty)?.name);
 
   // 選通路 → 收款方式自動帶入對應帳戶（收款方式是非受控欄位，直接改 DOM 的值）
   const fillPaymentFromChannel = (channel: string) => {
@@ -331,7 +349,8 @@ export default function EntryForm({
       noValidate
       onInput={recheck}
       onChange={recheck}
-      className={`flex flex-col gap-2 form-compact${editing ? "" : " card p-3"}`}
+      className={`flex flex-col gap-2 form-compact${editing ? " rounded-xl p-3" : " card p-3"}`}
+      style={{ background: tint }}
     >
       {editing && <input type="hidden" name="booking_key" value={initial.bookingKey} />}
       {/* 收入 / 支出 切換 */}
