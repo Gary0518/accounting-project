@@ -38,11 +38,11 @@ export default function SummaryKpis({
         />
         <StatTile label="住宿筆數" value={`${num(s.bookings)} 筆`} />
         <StatTile label="總間數" value={`${num(s.totalRoomNights)} 間`} />
-        {/* 清潔費是每月底排程才產生的，所以當月看到 0 是正常的 */}
+        {/* 依住宿列房間數即時累計；清潔費本身仍是月底排程才入帳 */}
         <StatTile
           label="清潔房間數"
           value={`${num(s.cleaningRooms)} 間`}
-          sub={`清潔費 ÷ ${CLEANING_FEE_PER_ROOM}`}
+          sub={`即時累計 · 月底入帳 × ${CLEANING_FEE_PER_ROOM}`}
         />
       </section>
     </>

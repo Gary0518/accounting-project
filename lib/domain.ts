@@ -135,7 +135,7 @@ export interface MonthlySummary {
   byRoomType: RoomTypeRow[]; // 房型間數統計
   totalRoomNights: number; // 總間數
   bookings: number; // 住宿筆數（訂單數：多房型的訂單有多列，只算一筆）
-  cleaningRooms: number; // 清潔房間數 = 清潔費金額 ÷ 300（當月底還沒結算前是 0）
+  cleaningRooms: number; // 清潔房間數 = 住宿列房間數加總（即時累計，不等月底清潔費入帳）
   occupancy: number; // 住宿率 0~1
   capacity: number; // 可售房間夜 = 房間總數 × 天數
 }
@@ -260,12 +260,10 @@ export function summarize(
   const deduction = sum(expense.map((e) => e.amount));
   const profit = addition - deduction;
 
-  // 清潔房間數：直接從帳上那筆清潔費反推（金額 ÷ 300），數字才跟支出結構對得起來。
-  // 不用住宿列的 rooms 加總，因為清潔費是每月底排程產生的，當月還沒產生時這裡就該是 0。
-  const cleaningRooms = Math.round(
-    sum(expense.filter((e) => e.category === "清潔費").map((e) => e.amount)) /
-      CLEANING_FEE_PER_ROOM,
-  );
+  // 清潔房間數：住宿列的房間數直接加總，記一筆住宿就即時累計，不用等月底。
+  // 月底排程產生清潔費也是用同一批住宿列的 rooms 加總 × 300，所以結算後兩邊對得起來；
+  // 月中支出結構還沒有清潔費，但這裡已經有數字，是刻意的。
+  const cleaningRooms = sum(stays.map((e) => e.rooms ?? 0));
 
   const byChannel = rank(income, (e) => e.channel ?? "未指定", incomeAmt, addition);
 
